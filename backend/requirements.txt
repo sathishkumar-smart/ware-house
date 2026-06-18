@@ -6,3 +6,4 @@ daphne
 graphene-django
 django-graphql-jwt
 python-dotenv
+requests

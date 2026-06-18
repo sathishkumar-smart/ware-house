@@ -2,9 +2,11 @@ import graphene
 import graphql_jwt
 from django.contrib.auth import get_user_model
 from graphql_jwt.decorators import login_required
+from warehouse.schema import Mutation as WarehouseMutation
+from warehouse.schema import Query as WarehouseQuery
 
 
-class Query(graphene.ObjectType):
+class Query(WarehouseQuery, graphene.ObjectType):
     me = graphene.String()
 
     @login_required
@@ -24,16 +26,23 @@ class CreateUser(graphene.Mutation):
 
         if User.objects.filter(username=username).exists():
             return CreateUser(message="User already exists")
+        if User.objects.exists():
+            return CreateUser(
+                message="Public registration is closed. Ask an administrator to create the employee account."
+            )
 
-        User.objects.create_user(
+        user = User.objects.create_user(
             username=username,
             password=password
         )
+        user.is_staff = True
+        user.is_superuser = True
+        user.save(update_fields=["is_staff", "is_superuser"])
 
-        return CreateUser(message="User created successfully")
+        return CreateUser(message="Administrator account created successfully")
 
 
-class Mutation(graphene.ObjectType):
+class Mutation(WarehouseMutation, graphene.ObjectType):
 
     # ✅ LOGIN
     token_auth = graphql_jwt.ObtainJSONWebToken.Field()

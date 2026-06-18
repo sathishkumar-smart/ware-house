@@ -2,38 +2,50 @@ services:
 
   postgres:
     image: postgres:16
-    container_name: hms_postgres
+    container_name: warehouse_postgres
     restart: always
     environment:
-      POSTGRES_DB: hms
-      POSTGRES_USER: hms
-      POSTGRES_PASSWORD: hms
+      POSTGRES_DB: warehouse
+      POSTGRES_USER: warehouse
+      POSTGRES_PASSWORD: warehouse
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - warehouse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U warehouse -d warehouse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
   backend:
     build: ./backend
-    container_name: hms_backend
+    container_name: warehouse_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./backend:/app
     ports:
       - "8000:8000"
     environment:
-      - DB_HOST=postgres 
+      - DB_HOST=postgres
+      - POSTGRES_DB=warehouse
+      - POSTGRES_USER=warehouse
+      - POSTGRES_PASSWORD=warehouse
 
   frontend:
     build: ./frontend
-    container_name: hms_frontend
+    container_name: warehouse_frontend
     volumes:
       - ./frontend:/app
       - /app/node_modules
     environment:
       - WATCHPACK_POLLING=true
+      - NEXT_PUBLIC_GRAPHQL_URL=http://localhost:8000/graphql/
     command: npm run dev
     ports:
       - "3000:3000"
 
 volumes:
-  postgres_data:
+  warehouse_postgres_data:

@@ -12,12 +12,11 @@ load_dotenv()
 @method_decorator(csrf_exempt, name='dispatch')  # ✅ add this
 class TestEmailView(View):
     def post(self, request):
-        print(os.getenv('EMAIL_HOST'), os.getenv('EMAIL_PORT'), os.getenv('EMAIL_USE_TLS'), os.getenv('EMAIL_HOST_USER'), os.getenv('EMAIL_HOST_PASSWORD'))
         try:
             data = json.loads(request.body)
             to_email = data.get('to')
-            subject = data.get('subject', 'Test Email from HMS')
-            message = data.get('message', 'This is a test email from your HMS Django app!')
+            subject = data.get('subject', 'Test Email from Wareflow')
+            message = data.get('message', 'This is a test email from your Wareflow warehouse app.')
 
             if not to_email:
                 return JsonResponse({'error': 'to email is required'}, status=400)
