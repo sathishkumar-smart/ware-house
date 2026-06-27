@@ -559,6 +559,87 @@ class CreditPayment(models.Model):
 
 # ─── OTP authentication ───────────────────────────────────────────────────────
 
+# ─── returns ──────────────────────────────────────────────────────────────────
+
+class BuyerReturn(models.Model):
+    """A buyer returns finished goods to us — defect, wrong size, etc."""
+    class Condition(models.TextChoices):
+        RESTOCKABLE = "RESTOCKABLE", "Restockable"
+        DAMAGED = "DAMAGED", "Damaged / Defective"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        RECEIVED = "RECEIVED", "Received"
+        RESTOCKED = "RESTOCKED", "Restocked"
+        DISCARDED = "DISCARDED", "Discarded"
+
+    return_number = models.CharField(max_length=40, unique=True, editable=False)
+    sales_order = models.ForeignKey(SalesOrder, null=True, blank=True, on_delete=models.SET_NULL, related_name="buyer_returns")
+    buyer = models.ForeignKey(Buyer, on_delete=models.PROTECT, related_name="returns")
+    finished_product = models.ForeignKey(FinishedProduct, on_delete=models.PROTECT, related_name="buyer_returns")
+    quantity = models.PositiveIntegerField()
+    condition = models.CharField(max_length=20, choices=Condition.choices, default=Condition.RESTOCKABLE)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    reason = models.TextField()
+    warehouse = models.ForeignKey(WarehouseLocation, on_delete=models.PROTECT, related_name="buyer_returns")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.return_number:
+            self.return_number = _serial("BR", BuyerReturn)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.return_number} — {self.buyer.name}"
+
+
+class SupplierReturn(models.Model):
+    """We return raw cloth or readymade goods back to a supplier."""
+    class ReturnKind(models.TextChoices):
+        RAW_CLOTH = "RAW_CLOTH", "Raw Cloth"
+        READYMADE = "READYMADE", "Readymade Items"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        DISPATCHED = "DISPATCHED", "Dispatched"
+        CONFIRMED = "CONFIRMED", "Confirmed by Supplier"
+
+    return_number = models.CharField(max_length=40, unique=True, editable=False)
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="returns")
+    return_kind = models.CharField(max_length=20, choices=ReturnKind.choices)
+
+    # For raw cloth returns
+    raw_cloth_batch = models.ForeignKey(RawClothBatch, null=True, blank=True, on_delete=models.SET_NULL, related_name="supplier_returns")
+    meters_returned = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    # For readymade returns
+    readymade_stock = models.ForeignKey(ReadymadeStock, null=True, blank=True, on_delete=models.SET_NULL, related_name="supplier_returns")
+    quantity_returned = models.PositiveIntegerField(null=True, blank=True)
+
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    warehouse = models.ForeignKey(WarehouseLocation, on_delete=models.PROTECT, related_name="supplier_returns")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="supplier_returns_created")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.return_number:
+            self.return_number = _serial("SR", SupplierReturn)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.return_number} — {self.supplier.name}"
+
+
 class OTPCode(models.Model):
     class Purpose(models.TextChoices):
         LOGIN = "LOGIN", "Login"
@@ -618,17 +699,22 @@ class SystemSettings(models.Model):
     primary_color = models.CharField(max_length=7, default="#1a1a2e")
     accent_color = models.CharField(max_length=7, default="#c9963c")
     default_dark_mode = models.BooleanField(default=False)
+    company_name = models.CharField(max_length=100, default="My Garment Business")
+    currency_symbol = models.CharField(max_length=5, default="₹")
+    tax_percent = models.DecimalField(max_digits=5, decimal_places=2, default=18)
     smtp_host = models.CharField(max_length=200, blank=True)
     smtp_port = models.PositiveSmallIntegerField(default=587)
     smtp_user = models.CharField(max_length=200, blank=True)
     smtp_password = models.CharField(max_length=200, blank=True)
     smtp_use_tls = models.BooleanField(default=True)
-    alert_email = models.EmailField(blank=True)
+    smtp_from_email = models.EmailField(blank=True)
+    email_enabled = models.BooleanField(default=False)
     twilio_account_sid = models.CharField(max_length=200, blank=True)
     twilio_auth_token = models.CharField(max_length=200, blank=True)
     twilio_from_number = models.CharField(max_length=20, blank=True)
     sms_enabled = models.BooleanField(default=False)
     otp_expiry_minutes = models.PositiveSmallIntegerField(default=10)
+    allow_otp_login = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="settings_updates"

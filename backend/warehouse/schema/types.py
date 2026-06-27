@@ -3,6 +3,7 @@ from graphene_django import DjangoObjectType
 
 from warehouse.models import (
     Buyer,
+    BuyerReturn,
     ClothCategory,
     ClothColor,
     CreditPayment,
@@ -21,6 +22,7 @@ from warehouse.models import (
     SalesOrderItem,
     StitchingJob,
     Supplier,
+    SupplierReturn,
     SystemSettings,
     WarehouseLocation,
 )
@@ -161,6 +163,18 @@ class CreditTransactionType(DjangoObjectType):
         fields = "__all__"
 
 
+class BuyerReturnType(DjangoObjectType):
+    class Meta:
+        model = BuyerReturn
+        fields = "__all__"
+
+
+class SupplierReturnType(DjangoObjectType):
+    class Meta:
+        model = SupplierReturn
+        fields = "__all__"
+
+
 class NotificationType(DjangoObjectType):
     class Meta:
         model = Notification
@@ -170,7 +184,7 @@ class NotificationType(DjangoObjectType):
 class SystemSettingsType(DjangoObjectType):
     class Meta:
         model = SystemSettings
-        exclude = ("twilio_account_sid", "twilio_auth_token", "smtp_password", "smtp_user")
+        fields = "__all__"
 
 
 class DashboardStats(graphene.ObjectType):

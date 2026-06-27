@@ -30,6 +30,11 @@
   /* Legacy aliases */
   --green:   var(--primary);
   --green-2: var(--primary-3);
+
+  /* Component aliases used by organism components */
+  --fg:     var(--ink);
+  --bg:     var(--canvas);
+  --border: var(--line);
 }
 
 /* ─── Reset ───────────────────────────────────────────────────────────────── */

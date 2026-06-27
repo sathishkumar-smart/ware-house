@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from .models import (
     Buyer,
+    BuyerReturn,
     ClothCategory,
     ClothColor,
     CreditTransaction,
@@ -17,6 +18,7 @@ from .models import (
     SalesOrder,
     StitchingJob,
     Supplier,
+    SupplierReturn,
     SystemSettings,
     WarehouseLocation,
     EmployeeProfile,
@@ -301,3 +303,15 @@ def get_dashboard_stats(user):
 
 
 from .models import SalesOrderItem
+
+
+def get_buyer_returns(user):
+    return BuyerReturn.objects.select_related(
+        "buyer", "finished_product", "finished_product__item_type", "warehouse"
+    ).order_by("-created_at")
+
+
+def get_supplier_returns(user):
+    return SupplierReturn.objects.select_related(
+        "supplier", "raw_cloth_batch", "readymade_stock", "warehouse"
+    ).order_by("-created_at")

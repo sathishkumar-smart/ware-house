@@ -1,111 +1,171 @@
-export type AppSettings = {
-  appName: string;
-  appSubtitle: string;
-  logoUrl: string;
-  primaryColor: string;
-  accentColor: string;
-  defaultDarkMode: boolean;
-  whatsappEnabled: boolean;
-  whatsappFromNumber: string;
-  alertEmail: string;
-};
+// ─── master data ─────────────────────────────────────────────────────────────
 
-export type Vendor = {
-  id: string; name: string; contactPerson: string;
-  email: string; phone: string; address: string; gstin: string;
-};
+export interface ClothCategory { id: string; name: string; description: string; active: boolean }
+export interface ClothColor { id: string; name: string; hexCode: string; active: boolean }
+export interface ItemType { id: string; name: string; category: string; clothLengthPerPiece: number; active: boolean }
+export interface WarehouseLocation { id: string; name: string; code: string; locationType: string; city: string; state: string; address: string; phone: string; active: boolean }
 
-export type WarehouseLocation = {
-  id: string; name: string; code: string; address: string;
-  city: string; state: string; pincode: string;
-  active: boolean; createdAt: string;
-};
+// ─── people ───────────────────────────────────────────────────────────────────
 
-export type Product = {
-  id: string; name: string; sku: string; category: string;
-  unitPrice: string; gstRate: string; hsnCode: string;
-  currentStock: number; reorderLevel: number; location: string;
-  isLowStock: boolean; vendor: Vendor | null;
-};
+export interface Employee {
+  id: string; username: string; email: string; role: string; phone: string; active: boolean
+  locations: WarehouseLocation[]; createdAt: string
+}
 
-export type Movement = {
-  id: string; movementType: string; quantity: number;
-  previousStock: number; newStock: number; reference: string;
-  notes: string; createdAt: string;
-  product: Pick<Product, "name" | "sku">;
-  warehouse: Pick<WarehouseLocation, "name" | "code"> | null;
-};
+// ─── suppliers & buyers ───────────────────────────────────────────────────────
 
-export type ReturnItem = {
-  id: string; returnType: string; condition: string;
-  quantity: number; status: string; reason: string;
-  reference: string; createdAt: string;
-  product: Pick<Product, "name" | "sku">;
-  vendor: Pick<Vendor, "name"> | null;
-  warehouse: Pick<WarehouseLocation, "name"> | null;
-};
+export interface Supplier {
+  id: string; name: string; contactPerson: string; email: string; phone: string
+  whatsapp: string; address: string; city: string; state: string; gstin: string
+  supplyType: string; creditDays: number; notes: string; active: boolean
+}
 
-export type Damage = {
-  id: string; quantity: number; reason: string; status: string;
-  reference: string; createdAt: string;
-  product: Pick<Product, "name" | "sku">;
-  warehouse: Pick<WarehouseLocation, "name"> | null;
-};
+export interface Buyer {
+  id: string; name: string; contactPerson: string; email: string; phone: string
+  whatsapp: string; address: string; city: string; state: string; gstin: string
+  buyerType: string; creditLimit: number; notes: string; active: boolean
+}
 
-export type Employee = {
-  id: string; role: string; phone: string; active: boolean;
-  createdAt: string; username: string; email: string;
-  locations: Pick<WarehouseLocation, "id" | "name" | "code">[];
-};
+// ─── purchase orders ─────────────────────────────────────────────────────────
 
-export type ReplenishmentRequest = {
-  id: string; quantity: number; expectedDate: string | null;
-  status: string; notes: string; createdAt: string; sentAt: string | null;
-  product: Pick<Product, "name" | "sku">;
-  vendor: Pick<Vendor, "name" | "email">;
-  warehouse: Pick<WarehouseLocation, "name" | "code">;
-};
+export interface POItem {
+  id: string; itemKind: string; clothCategory?: ClothCategory; clothColor?: ClothColor
+  orderedMeters?: number; receivedMeters?: number; itemType?: ItemType
+  itemName?: string; size?: string; orderedQuantity?: number; receivedQuantity?: number
+  unitPrice: number; totalPrice: number; notes: string
+}
 
-export type NotificationItem = {
-  id: string; title: string; message: string;
-  level: string; read: boolean; createdAt: string;
-};
+export interface PurchaseOrder {
+  id: string; poNumber: string; supplier: Supplier; orderType: string; status: string
+  orderDate: string; expectedDelivery?: string; actualDelivery?: string
+  warehouse: WarehouseLocation; totalAmount: number; notes: string
+  items: POItem[]; createdAt: string
+}
 
-export type Stats = {
-  totalProducts: number; totalUnits: number; lowStockProducts: number;
-  totalVendors: number; pendingReturns: number; damagedUnits: number;
-  inventoryValue: number;
-};
+// ─── inventory ────────────────────────────────────────────────────────────────
 
-export type WarehouseData = {
-  me: string;
-  dashboardStats: Stats;
-  products: Product[];
-  vendors: Vendor[];
-  stockMovements: Movement[];
-  returns: ReturnItem[];
-  damagedProducts: Damage[];
-  warehouseLocations: WarehouseLocation[];
-  employeeProfile: { role: string };
-  employees: Employee[];
-  replenishmentRequests: ReplenishmentRequest[];
-  notifications: NotificationItem[];
-  systemSettings: AppSettings;
-};
+export interface RawClothBatch {
+  id: string; batchNumber: string; supplier: Supplier; clothCategory: ClothCategory
+  clothColor: ClothColor; warehouse: WarehouseLocation; totalMeters: number
+  availableMeters: number; costPerMeter: number; binLocation: string; receivedDate: string
+}
+
+export interface ReadymadeStock {
+  id: string; itemType: ItemType; clothColor?: ClothColor; size: string
+  warehouse: WarehouseLocation; quantityReceived: number; quantityAvailable: number
+  costPrice: number; receivedDate: string; supplier: Supplier
+}
+
+// ─── production ───────────────────────────────────────────────────────────────
+
+export interface CuttingAssignment {
+  id: string; assignmentNumber: string; rawClothBatch: RawClothBatch
+  cuttingMaster: Employee; itemType: ItemType; metersAssigned: number
+  targetPieces: number; status: string; assignedDate: string; dueDate?: string
+  piecesCompleted: number; clothUsed: number; clothWasted: number; completedDate?: string; notes: string
+}
+
+export interface StitchingJob {
+  id: string; jobNumber: string; cuttingAssignment: CuttingAssignment
+  tailor: Employee; piecesAssigned: number; status: string
+  assignedDate: string; dueDate?: string; piecesCompleted: number
+  piecesRejected: number; completedDate?: string; notes: string
+}
+
+// ─── finished products ────────────────────────────────────────────────────────
+
+export interface FinishedProduct {
+  id: string; sku: string; itemType: ItemType; clothCategory?: ClothCategory
+  clothColor?: ClothColor; size: string; source: string; quantity: number
+  warehouse: WarehouseLocation; costPrice: number; salePrice: number
+  profitMargin: number; barcode: string; barcodeSvg: string; tagsPrinted: boolean; createdAt: string
+}
+
+// ─── sales orders ─────────────────────────────────────────────────────────────
+
+export interface SOItem {
+  id: string; finishedProduct: FinishedProduct; quantity: number; unitPrice: number; totalPrice: number
+}
+
+export interface SalesOrder {
+  id: string; orderNumber: string; buyer: Buyer; status: string; paymentMode: string
+  orderDate: string; expectedDelivery?: string; actualDelivery?: string
+  warehouse: WarehouseLocation; subtotal: number; discount: number; totalAmount: number
+  amountPaid: number; amountDue: number; notes: string; items: SOItem[]; createdAt: string
+}
+
+// ─── credit ───────────────────────────────────────────────────────────────────
+
+export interface CreditPayment {
+  id: string; amount: number; paymentDate: string; paymentMethod: string; reference: string; notes: string
+}
+
+export interface CreditTransaction {
+  id: string; salesOrder: SalesOrder; buyer: Buyer; totalAmount: number
+  amountPaid: number; amountDue: number; dueDate?: string; status: string
+  payments: CreditPayment[]; createdAt: string
+}
+
+// ─── returns ─────────────────────────────────────────────────────────────────
+
+export interface BuyerReturn {
+  id: string; returnNumber: string; buyer: Buyer; finishedProduct: FinishedProduct
+  quantity: number; condition: string; status: string; reason: string
+  warehouse: WarehouseLocation; createdAt: string
+}
+
+export interface SupplierReturn {
+  id: string; returnNumber: string; supplier: Supplier; returnKind: string
+  rawClothBatch?: RawClothBatch; metersReturned?: number
+  readymadeStock?: ReadymadeStock; quantityReturned?: number
+  reason: string; status: string; warehouse: WarehouseLocation; createdAt: string
+}
+
+// ─── notifications ────────────────────────────────────────────────────────────
+
+export interface NotificationItem {
+  id: string; title: string; message: string; level: string; read: boolean; createdAt: string
+}
+export type Notification = NotificationItem
+
+// ─── dashboard ────────────────────────────────────────────────────────────────
+
+export interface DashboardStats {
+  totalRawMeters: number; totalFinishedPieces: number; readymadePieces: number
+  inhousePieces: number; activePurchaseOrders: number; activeSalesOrders: number
+  cuttingInProgress: number; stitchingInProgress: number; creditOutstanding: number
+  revenueThisMonth: number; revenueThisYear: number; totalSuppliers: number; totalBuyers: number
+}
+
+// ─── app shell ────────────────────────────────────────────────────────────────
+
+export interface AppSettings {
+  appName: string; appSubtitle: string; logoUrl: string
+  primaryColor: string; accentColor: string; defaultDarkMode: boolean
+}
+
+export interface SystemSettings extends AppSettings {
+  smtpHost: string; smtpPort: number; smtpUser: string; smtpPassword: string
+  smtpFromEmail: string; emailEnabled: boolean
+  twilioSid: string; twilioToken: string; twilioFrom: string; smsEnabled: boolean
+  otpExpiryMinutes: number; allowOtpLogin: boolean
+  companyName: string; currencySymbol: string; taxPercent: number
+}
 
 export type Tab =
-  | "dashboard" | "inventory" | "movements" | "returns"
-  | "damages" | "vendors" | "warehouses" | "employees"
-  | "replenishment" | "notifications" | "settings";
+  | "dashboard" | "suppliers" | "buyers"
+  | "purchase_orders" | "raw_cloth" | "readymade_stock"
+  | "cutting" | "stitching" | "finished_products"
+  | "sales_orders" | "credit" | "returns"
+  | "employees" | "warehouses" | "notifications" | "settings"
 
-export type Modal =
-  | "product" | "vendor" | "stock" | "return" | "damage"
-  | "replenish" | "employee" | "warehouse" | "resolve_damage"
-  | null;
+export interface Modal {
+  type: string
+  data?: Record<string, unknown>
+}
 
-export type ConfirmState = {
-  title: string;
-  message: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-} | null;
+export interface ConfirmState {
+  open: boolean
+  message: string
+  onConfirm: () => void
+}

@@ -4,6 +4,7 @@ from graphql_jwt.decorators import login_required
 from warehouse import selectors
 
 from .types import (
+    BuyerReturnType,
     BuyerType,
     ClothCategoryType,
     ClothColorType,
@@ -19,6 +20,7 @@ from .types import (
     ReadymadeStockType,
     SalesOrderType,
     StitchingJobType,
+    SupplierReturnType,
     SupplierType,
     SystemSettingsType,
     WarehouseLocationType,
@@ -58,6 +60,10 @@ class Query(graphene.ObjectType):
     # Sales
     sales_orders = graphene.List(SalesOrderType, status=graphene.String(), buyer_id=graphene.ID(), limit=graphene.Int())
     credit_transactions = graphene.List(CreditTransactionType, buyer_id=graphene.ID(), status=graphene.String(), limit=graphene.Int())
+
+    # Returns
+    buyer_returns = graphene.List(BuyerReturnType)
+    supplier_returns = graphene.List(SupplierReturnType)
 
     # Misc
     notifications = graphene.List(NotificationType, unread_only=graphene.Boolean())
@@ -131,6 +137,14 @@ class Query(graphene.ObjectType):
     @login_required
     def resolve_credit_transactions(self, info, buyer_id=None, status=None, limit=50):
         return selectors.get_credit_transactions(info.context.user, buyer_id=buyer_id, status=status, limit=limit)
+
+    @login_required
+    def resolve_buyer_returns(self, info):
+        return selectors.get_buyer_returns(info.context.user)
+
+    @login_required
+    def resolve_supplier_returns(self, info):
+        return selectors.get_supplier_returns(info.context.user)
 
     @login_required
     def resolve_notifications(self, info, unread_only=False):

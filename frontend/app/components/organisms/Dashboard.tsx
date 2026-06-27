@@ -1,97 +1,54 @@
-import Empty from "@/app/components/atoms/Empty";
-import { formatMoney, formatDateShort } from "@/app/lib/formatters";
-import type { WarehouseData, Tab, Modal, Movement } from "@/app/types";
+"use client";
+import type { DashboardStats, Employee } from "@/app/types";
+import { formatMoney } from "@/app/lib/formatters";
 
-function MovementsList({ movements }: { movements: Movement[] }) {
-  if (!movements.length) return <Empty compact text="No inventory activity yet." />;
+function StatCard({ label, value, sub, color = "var(--primary)" }: { label: string; value: string | number; sub?: string; color?: string }) {
   return (
-    <div>
-      {movements.map(item => (
-        <div className="movement-item" key={item.id}>
-          <div className={item.quantity > 0 ? "movement-icon in" : "movement-icon out"}>
-            {item.quantity > 0 ? "↓" : "↑"}
-          </div>
-          <div>
-            <strong>{item.product.name}</strong>
-            <span>{item.movementType.replaceAll("_", " ")} · {formatDateShort(item.createdAt)}</span>
-          </div>
-          <strong className={item.quantity > 0 ? "positive" : "negative"}>
-            {item.quantity > 0 ? "+" : ""}{item.quantity}
-          </strong>
-        </div>
-      ))}
+    <div style={{
+      background: "var(--paper)", border: "1px solid var(--border)", borderRadius: 12,
+      padding: "18px 22px", borderLeft: `4px solid ${color}`,
+    }}>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 700, color: "var(--fg)" }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
 
-export default function Dashboard({
-  data,
-  setTab,
-  openModal,
-}: {
-  data: WarehouseData;
-  setTab: (t: Tab) => void;
-  openModal: (m: Modal) => void;
-}) {
-  const stats = data.dashboardStats;
-  const cards: [string, string, string, string][] = [
-    ["Inventory value",  formatMoney(stats.inventoryValue),        "Across all active stock",    "sage"],
-    ["Units on hand",    stats.totalUnits.toLocaleString("en-IN"), `${stats.totalProducts} active products`, "blue"],
-    ["Low stock",        String(stats.lowStockProducts),           "At or below reorder point",  "amber"],
-    ["Damaged units",    String(stats.damagedUnits),               "Currently quarantined",       "rose"],
-  ];
-  const lowStock = data.products.filter(p => p.isLowStock).slice(0, 5);
-
+export default function Dashboard({ stats, profile }: { stats: DashboardStats; profile: Employee }) {
   return (
-    <>
-      <section className="welcome-row">
-        <div>
-          <h2>Good to see you, {data.me}.</h2>
-          <p>Here is what needs attention across your warehouses today.</p>
+    <div style={{ padding: 28 }}>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Welcome back, {profile.username}</h1>
+        <div style={{ color: "var(--muted)", marginTop: 4, fontSize: 14 }}>
+          {profile.role.replace(/_/g, " ")} · {profile.locations.map(l => l.name).join(", ") || "All locations"}
         </div>
-        <div className="date-chip">● Live inventory</div>
-      </section>
+      </div>
 
-      <section className="stat-grid">
-        {cards.map(([label, value, detail, tone]) => (
-          <article className={`stat-card ${tone}`} key={label}>
-            <div><span>{label}</span><b>↗</b></div>
-            <strong>{value}</strong>
-            <p>{detail}</p>
-          </article>
-        ))}
-      </section>
+      <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 1 }}>Inventory Snapshot</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 14, marginBottom: 28 }}>
+        <StatCard label="Raw Cloth Available" value={`${stats.totalRawMeters.toFixed(1)} m`} />
+        <StatCard label="Finished Pieces" value={stats.totalFinishedPieces}
+          sub={`${stats.inhousePieces} stitched · ${stats.readymadePieces} imported`} />
+        <StatCard label="Suppliers" value={stats.totalSuppliers} />
+        <StatCard label="Buyers" value={stats.totalBuyers} />
+      </div>
 
-      <section className="dashboard-grid">
-        <article className="panel">
-          <div className="panel-head">
-            <div><h3>Recent stock activity</h3><p>Latest inventory movements</p></div>
-            <button className="text-button" onClick={() => setTab("movements")}>View all →</button>
-          </div>
-          <MovementsList movements={data.stockMovements.slice(0, 6)} />
-        </article>
-        <article className="panel">
-          <div className="panel-head">
-            <div><h3>Needs attention</h3><p>Products at reorder level</p></div>
-            <span className="count-chip">{lowStock.length}</span>
-          </div>
-          {lowStock.length ? lowStock.map(p => (
-            <div className="attention-item" key={p.id}>
-              <div className="product-icon">{p.name.slice(0, 1)}</div>
-              <div><strong>{p.name}</strong><span>{p.sku} · {p.location || "No location"}</span></div>
-              <div className="stock-count"><strong>{p.currentStock}</strong><span>min {p.reorderLevel}</span></div>
-            </div>
-          )) : <Empty compact text="All products are above reorder point." />}
-          <button className="wide-button" onClick={() => openModal("stock")}>Receive stock</button>
-        </article>
-      </section>
+      <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 1 }}>Active Operations</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 14, marginBottom: 28 }}>
+        <StatCard label="Purchase Orders" value={stats.activePurchaseOrders} color="#2196f3" />
+        <StatCard label="Sales Orders" value={stats.activeSalesOrders} color="#9c27b0" />
+        <StatCard label="Cutting In Progress" value={stats.cuttingInProgress} color="#ff9800" />
+        <StatCard label="Stitching In Progress" value={stats.stitchingInProgress} color="#ff9800" />
+      </div>
 
-      <section className="quick-actions">
-        <button onClick={() => openModal("stock")}><span>＋</span><div><strong>Receive stock</strong><small>Add an inbound delivery</small></div></button>
-        <button onClick={() => openModal("return")}><span>↩</span><div><strong>Log a return</strong><small>Customer or vendor return</small></div></button>
-        <button onClick={() => openModal("damage")}><span>!</span><div><strong>Report damage</strong><small>Quarantine damaged units</small></div></button>
-        <button onClick={() => openModal("replenish")}><span>✉</span><div><strong>Request stock</strong><small>Email a replenishment request</small></div></button>
-      </section>
-    </>
+      <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 1 }}>Revenue & Credit</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 14 }}>
+        <StatCard label="Revenue This Month" value={formatMoney(stats.revenueThisMonth)} color="var(--accent)" />
+        <StatCard label="Revenue This Year" value={formatMoney(stats.revenueThisYear)} color="var(--accent)" />
+        <StatCard label="Credit Outstanding" value={formatMoney(stats.creditOutstanding)}
+          color={stats.creditOutstanding > 0 ? "#f44336" : "#4caf50"} />
+      </div>
+    </div>
   );
 }
