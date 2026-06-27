@@ -1,40 +1,32 @@
 from django.contrib import admin
 
 from .models import (
-    DamagedProduct,
+    Buyer,
+    ClothCategory,
+    ClothColor,
+    CreditTransaction,
+    CuttingAssignment,
     EmployeeProfile,
-    InventoryBalance,
+    FinishedProduct,
+    ItemType,
     Notification,
-    Product,
-    ReplenishmentRequest,
-    ReturnRecord,
-    StockMovement,
+    OTPCode,
+    PurchaseOrder,
+    RawClothBatch,
+    ReadymadeStock,
+    SalesOrder,
+    StitchingJob,
+    Supplier,
     SystemSettings,
-    Vendor,
     WarehouseLocation,
 )
 
 
-@admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
-    list_display = ("sku", "name", "category", "current_stock", "reorder_level", "unit_price", "vendor", "active")
-    search_fields = ("sku", "name", "category", "hsn_code")
-    list_filter = ("active", "category")
-    readonly_fields = ("created_at", "updated_at")
-
-
-@admin.register(Vendor)
-class VendorAdmin(admin.ModelAdmin):
-    list_display = ("name", "contact_person", "email", "phone", "gstin", "active")
-    search_fields = ("name", "gstin", "email")
-    list_filter = ("active",)
-
-
 @admin.register(WarehouseLocation)
 class WarehouseLocationAdmin(admin.ModelAdmin):
-    list_display = ("code", "name", "city", "state", "pincode", "active")
+    list_display = ("code", "name", "location_type", "city", "state", "active")
     search_fields = ("code", "name", "city")
-    list_filter = ("active",)
+    list_filter = ("active", "location_type")
 
 
 @admin.register(EmployeeProfile)
@@ -49,72 +41,120 @@ class EmployeeProfileAdmin(admin.ModelAdmin):
         return obj.user.username
 
 
-@admin.register(StockMovement)
-class StockMovementAdmin(admin.ModelAdmin):
-    list_display = ("product", "warehouse", "movement_type", "quantity", "created_by", "created_at")
-    list_filter = ("movement_type", "warehouse")
-    search_fields = ("product__name", "product__sku", "reference")
-    readonly_fields = ("created_at",)
+@admin.register(ClothCategory)
+class ClothCategoryAdmin(admin.ModelAdmin):
+    list_display = ("name", "description", "active")
+    search_fields = ("name",)
+    list_filter = ("active",)
 
 
-@admin.register(InventoryBalance)
-class InventoryBalanceAdmin(admin.ModelAdmin):
-    list_display = ("product", "warehouse", "quantity", "reorder_level", "bin_location")
-    list_filter = ("warehouse",)
-    search_fields = ("product__name", "product__sku", "bin_location")
+@admin.register(ClothColor)
+class ClothColorAdmin(admin.ModelAdmin):
+    list_display = ("name", "hex_code", "active")
+    search_fields = ("name",)
 
 
-@admin.register(ReturnRecord)
-class ReturnRecordAdmin(admin.ModelAdmin):
-    list_display = ("product", "warehouse", "return_type", "condition", "quantity", "status", "created_at")
-    list_filter = ("return_type", "condition", "status", "warehouse")
-    search_fields = ("product__name", "reference")
-    readonly_fields = ("created_at",)
+@admin.register(ItemType)
+class ItemTypeAdmin(admin.ModelAdmin):
+    list_display = ("name", "category", "cloth_length_per_piece", "active")
+    search_fields = ("name", "category")
+    list_filter = ("active", "category")
 
 
-@admin.register(DamagedProduct)
-class DamagedProductAdmin(admin.ModelAdmin):
-    list_display = ("product", "warehouse", "quantity", "status", "created_at", "resolved_at")
-    list_filter = ("status", "warehouse")
-    search_fields = ("product__name", "reference")
-    readonly_fields = ("created_at",)
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ("name", "contact_person", "phone", "supply_type", "gstin", "active")
+    search_fields = ("name", "gstin", "email")
+    list_filter = ("active", "supply_type")
 
 
-@admin.register(ReplenishmentRequest)
-class ReplenishmentRequestAdmin(admin.ModelAdmin):
-    list_display = ("product", "vendor", "warehouse", "quantity", "status", "expected_date", "created_at")
-    list_filter = ("status", "warehouse")
-    search_fields = ("product__name", "vendor__name")
-    readonly_fields = ("created_at", "sent_at")
+@admin.register(Buyer)
+class BuyerAdmin(admin.ModelAdmin):
+    list_display = ("name", "contact_person", "phone", "buyer_type", "credit_limit", "active")
+    search_fields = ("name", "gstin", "email")
+    list_filter = ("active", "buyer_type")
+
+
+@admin.register(PurchaseOrder)
+class PurchaseOrderAdmin(admin.ModelAdmin):
+    list_display = ("po_number", "supplier", "order_type", "status", "order_date", "total_amount")
+    list_filter = ("status", "order_type")
+    search_fields = ("po_number", "supplier__name")
+    readonly_fields = ("po_number", "created_at", "updated_at")
+
+
+@admin.register(RawClothBatch)
+class RawClothBatchAdmin(admin.ModelAdmin):
+    list_display = ("batch_number", "cloth_category", "cloth_color", "available_meters", "total_meters", "warehouse")
+    search_fields = ("batch_number",)
+    list_filter = ("cloth_category", "cloth_color", "warehouse")
+    readonly_fields = ("batch_number", "created_at")
+
+
+@admin.register(ReadymadeStock)
+class ReadymadeStockAdmin(admin.ModelAdmin):
+    list_display = ("item_type", "cloth_color", "size", "quantity_available", "quantity_received", "warehouse")
+    list_filter = ("item_type", "warehouse")
+
+
+@admin.register(CuttingAssignment)
+class CuttingAssignmentAdmin(admin.ModelAdmin):
+    list_display = ("assignment_number", "cutting_master", "item_type", "meters_assigned", "target_pieces", "pieces_completed", "status")
+    list_filter = ("status", "item_type")
+    search_fields = ("assignment_number",)
+    readonly_fields = ("assignment_number", "created_at")
+
+
+@admin.register(StitchingJob)
+class StitchingJobAdmin(admin.ModelAdmin):
+    list_display = ("job_number", "tailor", "pieces_assigned", "pieces_completed", "pieces_rejected", "status")
+    list_filter = ("status",)
+    search_fields = ("job_number",)
+    readonly_fields = ("job_number", "created_at")
+
+
+@admin.register(FinishedProduct)
+class FinishedProductAdmin(admin.ModelAdmin):
+    list_display = ("sku", "item_type", "source", "cloth_color", "size", "quantity", "sale_price", "tags_printed")
+    list_filter = ("source", "item_type", "tags_printed", "warehouse")
+    search_fields = ("sku", "barcode")
+    readonly_fields = ("sku", "barcode", "created_at")
+
+
+@admin.register(SalesOrder)
+class SalesOrderAdmin(admin.ModelAdmin):
+    list_display = ("order_number", "buyer", "status", "payment_mode", "total_amount", "amount_due", "order_date")
+    list_filter = ("status", "payment_mode")
+    search_fields = ("order_number", "buyer__name")
+    readonly_fields = ("order_number", "created_at")
+
+
+@admin.register(CreditTransaction)
+class CreditTransactionAdmin(admin.ModelAdmin):
+    list_display = ("sales_order", "buyer", "total_amount", "amount_paid", "amount_due", "status", "due_date")
+    list_filter = ("status",)
+    search_fields = ("buyer__name", "sales_order__order_number")
 
 
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
     list_display = ("recipient", "title", "level", "read", "created_at")
     list_filter = ("level", "read")
-    search_fields = ("title", "message", "recipient__username")
+    search_fields = ("title", "recipient__username")
+    readonly_fields = ("created_at",)
+
+
+@admin.register(OTPCode)
+class OTPCodeAdmin(admin.ModelAdmin):
+    list_display = ("user", "purpose", "channel", "used", "expires_at", "created_at")
+    list_filter = ("purpose", "channel", "used")
     readonly_fields = ("created_at",)
 
 
 @admin.register(SystemSettings)
 class SystemSettingsAdmin(admin.ModelAdmin):
-    list_display = ("app_name", "primary_color", "whatsapp_enabled", "updated_at")
+    list_display = ("app_name", "primary_color", "sms_enabled", "updated_at")
     readonly_fields = ("updated_at", "updated_by")
-    fieldsets = (
-        ("Branding", {
-            "fields": ("app_name", "app_subtitle", "logo_url", "primary_color", "accent_color", "default_dark_mode"),
-        }),
-        ("Email Alerts", {
-            "fields": ("alert_email",),
-        }),
-        ("WhatsApp (Twilio)", {
-            "fields": ("whatsapp_enabled", "whatsapp_account_sid", "whatsapp_auth_token", "whatsapp_from_number"),
-            "classes": ("collapse",),
-        }),
-        ("Audit", {
-            "fields": ("updated_at", "updated_by"),
-        }),
-    )
 
     def has_add_permission(self, request):
         return not SystemSettings.objects.exists()

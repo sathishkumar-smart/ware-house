@@ -1,5 +1,4 @@
 import graphene
-from django.db import transaction
 from graphql_jwt.decorators import login_required
 
 from warehouse.models import EmployeeProfile
@@ -12,15 +11,14 @@ class CreateEmployee(graphene.Mutation):
     class Arguments:
         username = graphene.String(required=True)
         password = graphene.String(required=True)
-        email = graphene.String()
-        phone = graphene.String()
         role = graphene.String(required=True)
         warehouse_ids = graphene.List(graphene.NonNull(graphene.ID), required=True)
+        email = graphene.String()
+        phone = graphene.String()
 
     employee = graphene.Field(EmployeeProfileType)
 
     @login_required
-    @transaction.atomic
     def mutate(self, info, username, password, role, warehouse_ids, email="", phone=""):
         caller = require_role(info.context.user, EmployeeProfile.Role.ADMIN)
         return CreateEmployee(employee=create_employee(
@@ -41,12 +39,10 @@ class UpdateEmployee(graphene.Mutation):
     employee = graphene.Field(EmployeeProfileType)
 
     @login_required
-    @transaction.atomic
-    def mutate(self, info, id, role=None, phone=None, email=None, active=None, warehouse_ids=None):
+    def mutate(self, info, id, **kwargs):
         caller = require_role(info.context.user, EmployeeProfile.Role.ADMIN)
         return UpdateEmployee(employee=update_employee(
-            caller=caller, profile_id=id, requesting_user=info.context.user,
-            role=role, phone=phone, email=email, active=active, warehouse_ids=warehouse_ids,
+            caller=caller, profile_id=id, requesting_user=info.context.user, **kwargs,
         ))
 
 

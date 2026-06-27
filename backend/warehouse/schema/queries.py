@@ -4,46 +4,81 @@ from graphql_jwt.decorators import login_required
 from warehouse import selectors
 
 from .types import (
+    BuyerType,
+    ClothCategoryType,
+    ClothColorType,
+    CreditTransactionType,
+    CuttingAssignmentType,
     DashboardStats,
-    DamagedProductType,
     EmployeeProfileType,
-    InventoryBalanceType,
+    FinishedProductType,
+    ItemTypeType,
     NotificationType,
-    ProductType,
-    ReplenishmentRequestType,
-    ReturnRecordType,
-    StockMovementType,
+    PurchaseOrderType,
+    RawClothBatchType,
+    ReadymadeStockType,
+    SalesOrderType,
+    StitchingJobType,
+    SupplierType,
     SystemSettingsType,
-    VendorType,
     WarehouseLocationType,
 )
 
 
 class Query(graphene.ObjectType):
-    products = graphene.List(ProductType, search=graphene.String(), low_stock_only=graphene.Boolean())
-    vendors = graphene.List(VendorType)
-    stock_movements = graphene.List(StockMovementType, limit=graphene.Int())
-    returns = graphene.List(ReturnRecordType, limit=graphene.Int())
-    damaged_products = graphene.List(DamagedProductType, limit=graphene.Int())
-    dashboard_stats = graphene.Field(DashboardStats)
+    # Public
+    system_settings = graphene.Field(SystemSettingsType)
+
+    # Master data
+    cloth_categories = graphene.List(ClothCategoryType, active_only=graphene.Boolean())
+    cloth_colors = graphene.List(ClothColorType, active_only=graphene.Boolean())
+    item_types = graphene.List(ItemTypeType, active_only=graphene.Boolean())
     warehouse_locations = graphene.List(WarehouseLocationType)
+
+    # People
     employee_profile = graphene.Field(EmployeeProfileType)
     employees = graphene.List(EmployeeProfileType)
-    inventory_balances = graphene.List(InventoryBalanceType, warehouse_id=graphene.ID())
+
+    # Suppliers & buyers
+    suppliers = graphene.List(SupplierType, search=graphene.String(), supply_type=graphene.String())
+    buyers = graphene.List(BuyerType, search=graphene.String(), buyer_type=graphene.String())
+
+    # Inventory
+    purchase_orders = graphene.List(PurchaseOrderType, status=graphene.String(), limit=graphene.Int())
+    raw_cloth_batches = graphene.List(RawClothBatchType, category_id=graphene.ID(), color_id=graphene.ID(), warehouse_id=graphene.ID())
+    readymade_stock = graphene.List(ReadymadeStockType, item_type_id=graphene.ID(), warehouse_id=graphene.ID())
+
+    # Production
+    cutting_assignments = graphene.List(CuttingAssignmentType, status=graphene.String(), master_id=graphene.ID(), limit=graphene.Int())
+    stitching_jobs = graphene.List(StitchingJobType, status=graphene.String(), tailor_id=graphene.ID(), limit=graphene.Int())
+
+    # Finished goods
+    finished_products = graphene.List(FinishedProductType, item_type_id=graphene.ID(), search=graphene.String(), untagged_only=graphene.Boolean(), warehouse_id=graphene.ID())
+
+    # Sales
+    sales_orders = graphene.List(SalesOrderType, status=graphene.String(), buyer_id=graphene.ID(), limit=graphene.Int())
+    credit_transactions = graphene.List(CreditTransactionType, buyer_id=graphene.ID(), status=graphene.String(), limit=graphene.Int())
+
+    # Misc
     notifications = graphene.List(NotificationType, unread_only=graphene.Boolean())
-    replenishment_requests = graphene.List(ReplenishmentRequestType, limit=graphene.Int())
-    system_settings = graphene.Field(SystemSettingsType)
+    dashboard_stats = graphene.Field(DashboardStats)
+
+    # ── resolvers ─────────────────────────────────────────────────────────────
 
     def resolve_system_settings(self, info):
         return selectors.get_system_settings()
 
     @login_required
-    def resolve_notifications(self, info, unread_only=False):
-        return selectors.get_notifications(info.context.user, unread_only)
+    def resolve_cloth_categories(self, info, active_only=True):
+        return selectors.get_cloth_categories(active_only)
 
     @login_required
-    def resolve_replenishment_requests(self, info, limit=50):
-        return selectors.get_replenishment_requests(info.context.user, limit)
+    def resolve_cloth_colors(self, info, active_only=True):
+        return selectors.get_cloth_colors(active_only)
+
+    @login_required
+    def resolve_item_types(self, info, active_only=True):
+        return selectors.get_item_types(active_only)
 
     @login_required
     def resolve_warehouse_locations(self, info):
@@ -58,28 +93,48 @@ class Query(graphene.ObjectType):
         return selectors.get_employees(info.context.user)
 
     @login_required
-    def resolve_inventory_balances(self, info, warehouse_id=None):
-        return selectors.get_inventory_balances(info.context.user, warehouse_id)
+    def resolve_suppliers(self, info, search=None, supply_type=None):
+        return selectors.get_suppliers(search=search, supply_type=supply_type)
 
     @login_required
-    def resolve_products(self, info, search=None, low_stock_only=False):
-        return selectors.get_products(info.context.user, search, low_stock_only)
+    def resolve_buyers(self, info, search=None, buyer_type=None):
+        return selectors.get_buyers(search=search, buyer_type=buyer_type)
 
     @login_required
-    def resolve_vendors(self, info):
-        return selectors.get_vendors()
+    def resolve_purchase_orders(self, info, status=None, limit=50):
+        return selectors.get_purchase_orders(info.context.user, status=status, limit=limit)
 
     @login_required
-    def resolve_stock_movements(self, info, limit=30):
-        return selectors.get_stock_movements(info.context.user, limit)
+    def resolve_raw_cloth_batches(self, info, category_id=None, color_id=None, warehouse_id=None):
+        return selectors.get_raw_cloth_batches(info.context.user, category_id=category_id, color_id=color_id, warehouse_id=warehouse_id)
 
     @login_required
-    def resolve_returns(self, info, limit=30):
-        return selectors.get_returns(info.context.user, limit)
+    def resolve_readymade_stock(self, info, item_type_id=None, warehouse_id=None):
+        return selectors.get_readymade_stock(info.context.user, item_type_id=item_type_id, warehouse_id=warehouse_id)
 
     @login_required
-    def resolve_damaged_products(self, info, limit=30):
-        return selectors.get_damaged_products(info.context.user, limit)
+    def resolve_cutting_assignments(self, info, status=None, master_id=None, limit=100):
+        return selectors.get_cutting_assignments(info.context.user, status=status, master_id=master_id, limit=limit)
+
+    @login_required
+    def resolve_stitching_jobs(self, info, status=None, tailor_id=None, limit=100):
+        return selectors.get_stitching_jobs(info.context.user, status=status, tailor_id=tailor_id, limit=limit)
+
+    @login_required
+    def resolve_finished_products(self, info, item_type_id=None, search=None, untagged_only=False, warehouse_id=None):
+        return selectors.get_finished_products(info.context.user, item_type_id=item_type_id, search=search, untagged_only=untagged_only, warehouse_id=warehouse_id)
+
+    @login_required
+    def resolve_sales_orders(self, info, status=None, buyer_id=None, limit=50):
+        return selectors.get_sales_orders(info.context.user, status=status, buyer_id=buyer_id, limit=limit)
+
+    @login_required
+    def resolve_credit_transactions(self, info, buyer_id=None, status=None, limit=50):
+        return selectors.get_credit_transactions(info.context.user, buyer_id=buyer_id, status=status, limit=limit)
+
+    @login_required
+    def resolve_notifications(self, info, unread_only=False):
+        return selectors.get_notifications(info.context.user, unread_only)
 
     @login_required
     def resolve_dashboard_stats(self, info):

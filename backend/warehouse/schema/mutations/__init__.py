@@ -1,30 +1,69 @@
 import graphene
+import graphql_jwt
 
-from .damage import ReportDamage, ResolveDamage
+from .auth import RequestOTP, VerifyOTPLogin
 from .employee import CreateEmployee, ResetEmployeePassword, UpdateEmployee
+from .master import (
+    CreateClothCategory, CreateClothColor, CreateItemType, CreateWarehouseLocation,
+    UpdateClothCategory, UpdateClothColor, UpdateItemType, UpdateWarehouseLocation,
+)
 from .notifications import MarkNotificationsRead
-from .replenishment import RequestReplenishment, UpdateReplenishmentStatus
-from .returns import CreateReturn
+from .production import (
+    CreateCuttingAssignment, CreateFinishedProducts,
+    CreateStitchingJob, UpdateCuttingAssignment, UpdateStitchingJob,
+)
+from .purchase_order import CreatePurchaseOrder, ReceivePurchaseOrder, UpdatePurchaseOrderStatus
+from .sales import CreateSalesOrder, RecordCreditPayment, UpdateSalesOrderStatus
 from .settings import UpdateSystemSettings
-from .stock import CreateProduct, UpdateStock
-from .vendor import CreateVendor, UpdateVendor
-from .warehouse import CreateWarehouseLocation, UpdateWarehouseLocation
+from .supplier import CreateBuyer, CreateSupplier, UpdateBuyer, UpdateSupplier
 
 
 class Mutation(graphene.ObjectType):
-    create_vendor = CreateVendor.Field()
-    update_vendor = UpdateVendor.Field()
-    create_product = CreateProduct.Field()
-    update_stock = UpdateStock.Field()
-    create_return = CreateReturn.Field()
-    report_damage = ReportDamage.Field()
-    resolve_damage = ResolveDamage.Field()
+    # Auth
+    token_auth = graphql_jwt.ObtainJSONWebToken.Field()
+    verify_token = graphql_jwt.Verify.Field()
+    refresh_token = graphql_jwt.Refresh.Field()
+    request_otp = RequestOTP.Field()
+    verify_otp_login = VerifyOTPLogin.Field()
+
+    # Master data
+    create_cloth_category = CreateClothCategory.Field()
+    update_cloth_category = UpdateClothCategory.Field()
+    create_cloth_color = CreateClothColor.Field()
+    update_cloth_color = UpdateClothColor.Field()
+    create_item_type = CreateItemType.Field()
+    update_item_type = UpdateItemType.Field()
     create_warehouse_location = CreateWarehouseLocation.Field()
     update_warehouse_location = UpdateWarehouseLocation.Field()
+
+    # People
     create_employee = CreateEmployee.Field()
     update_employee = UpdateEmployee.Field()
     reset_employee_password = ResetEmployeePassword.Field()
-    request_replenishment = RequestReplenishment.Field()
-    update_replenishment_status = UpdateReplenishmentStatus.Field()
+
+    # Suppliers & buyers
+    create_supplier = CreateSupplier.Field()
+    update_supplier = UpdateSupplier.Field()
+    create_buyer = CreateBuyer.Field()
+    update_buyer = UpdateBuyer.Field()
+
+    # Purchase orders
+    create_purchase_order = CreatePurchaseOrder.Field()
+    update_purchase_order_status = UpdatePurchaseOrderStatus.Field()
+    receive_purchase_order = ReceivePurchaseOrder.Field()
+
+    # Production pipeline
+    create_cutting_assignment = CreateCuttingAssignment.Field()
+    update_cutting_assignment = UpdateCuttingAssignment.Field()
+    create_stitching_job = CreateStitchingJob.Field()
+    update_stitching_job = UpdateStitchingJob.Field()
+    create_finished_products = CreateFinishedProducts.Field()
+
+    # Sales & credit
+    create_sales_order = CreateSalesOrder.Field()
+    update_sales_order_status = UpdateSalesOrderStatus.Field()
+    record_credit_payment = RecordCreditPayment.Field()
+
+    # Misc
     mark_notifications_read = MarkNotificationsRead.Field()
     update_system_settings = UpdateSystemSettings.Field()

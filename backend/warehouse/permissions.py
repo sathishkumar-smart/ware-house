@@ -1,21 +1,24 @@
 from graphql import GraphQLError
 
-from .models import EmployeeProfile, Product, WarehouseLocation
+from .models import EmployeeProfile, FinishedProduct, RawClothBatch, WarehouseLocation
 
 ELEVATED_ROLES = {EmployeeProfile.Role.SUPER_ADMIN, EmployeeProfile.Role.ADMIN}
+MANAGEMENT_ROLES = {EmployeeProfile.Role.SUPER_ADMIN, EmployeeProfile.Role.ADMIN, EmployeeProfile.Role.MANAGER}
+PRODUCTION_ROLES = {
+    EmployeeProfile.Role.SUPER_ADMIN, EmployeeProfile.Role.ADMIN,
+    EmployeeProfile.Role.MANAGER, EmployeeProfile.Role.STORE_KEEPER,
+}
 
 
 def get_profile(user):
     profile, _ = EmployeeProfile.objects.get_or_create(
         user=user,
         defaults={
-            "role": EmployeeProfile.Role.SUPER_ADMIN
-            if user.is_superuser
-            else EmployeeProfile.Role.INVENTORY_OPERATOR
+            "role": EmployeeProfile.Role.SUPER_ADMIN if user.is_superuser else EmployeeProfile.Role.STORE_KEEPER
         },
     )
     if not profile.active:
-        raise GraphQLError("Your warehouse employee account is inactive.")
+        raise GraphQLError("Your account has been deactivated. Contact an administrator.")
     return profile
 
 
@@ -36,14 +39,21 @@ def accessible_warehouses(user):
 
 
 def get_warehouse(user, warehouse_id):
-    warehouse = accessible_warehouses(user).filter(pk=warehouse_id).first()
-    if not warehouse:
+    wh = accessible_warehouses(user).filter(pk=warehouse_id).first()
+    if not wh:
         raise GraphQLError("Warehouse not found or not assigned to your account.")
-    return warehouse
+    return wh
 
 
-def get_product(product_id):
+def get_raw_cloth_batch(batch_id):
     try:
-        return Product.objects.select_for_update().get(pk=product_id, active=True)
-    except Product.DoesNotExist as exc:
-        raise GraphQLError("Product not found.") from exc
+        return RawClothBatch.objects.select_for_update().get(pk=batch_id, active=True)
+    except RawClothBatch.DoesNotExist as exc:
+        raise GraphQLError("Raw cloth batch not found.") from exc
+
+
+def get_finished_product(product_id):
+    try:
+        return FinishedProduct.objects.get(pk=product_id, active=True)
+    except FinishedProduct.DoesNotExist as exc:
+        raise GraphQLError("Finished product not found.") from exc

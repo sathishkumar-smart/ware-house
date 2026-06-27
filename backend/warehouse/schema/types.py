@@ -2,16 +2,26 @@ import graphene
 from graphene_django import DjangoObjectType
 
 from warehouse.models import (
-    DamagedProduct,
+    Buyer,
+    ClothCategory,
+    ClothColor,
+    CreditPayment,
+    CreditTransaction,
+    CuttingAssignment,
     EmployeeProfile,
-    InventoryBalance,
+    FinishedProduct,
+    ItemType,
     Notification,
-    Product,
-    ReplenishmentRequest,
-    ReturnRecord,
-    StockMovement,
+    OTPCode,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    RawClothBatch,
+    ReadymadeStock,
+    SalesOrder,
+    SalesOrderItem,
+    StitchingJob,
+    Supplier,
     SystemSettings,
-    Vendor,
     WarehouseLocation,
 )
 
@@ -37,57 +47,117 @@ class EmployeeProfileType(DjangoObjectType):
         return self.user.email
 
 
-class InventoryBalanceType(DjangoObjectType):
-    is_low_stock = graphene.Boolean()
-
+class ClothCategoryType(DjangoObjectType):
     class Meta:
-        model = InventoryBalance
-        fields = "__all__"
-
-    def resolve_is_low_stock(self, info):
-        return self.is_low_stock
-
-
-class VendorType(DjangoObjectType):
-    class Meta:
-        model = Vendor
+        model = ClothCategory
         fields = "__all__"
 
 
-class ProductType(DjangoObjectType):
-    is_low_stock = graphene.Boolean()
-    balances = graphene.List(InventoryBalanceType)
-    gst_rate = graphene.String()
-
+class ClothColorType(DjangoObjectType):
     class Meta:
-        model = Product
-        fields = "__all__"
-
-    def resolve_is_low_stock(self, info):
-        return self.is_low_stock
-
-    def resolve_balances(self, info):
-        return self.balances.select_related("warehouse").filter(warehouse__active=True)
-
-    def resolve_gst_rate(self, info):
-        return str(self.gst_rate)
-
-
-class StockMovementType(DjangoObjectType):
-    class Meta:
-        model = StockMovement
+        model = ClothColor
         fields = "__all__"
 
 
-class ReturnRecordType(DjangoObjectType):
+class ItemTypeType(DjangoObjectType):
     class Meta:
-        model = ReturnRecord
+        model = ItemType
         fields = "__all__"
 
 
-class DamagedProductType(DjangoObjectType):
+class SupplierType(DjangoObjectType):
     class Meta:
-        model = DamagedProduct
+        model = Supplier
+        fields = "__all__"
+
+
+class BuyerType(DjangoObjectType):
+    class Meta:
+        model = Buyer
+        fields = "__all__"
+
+
+class PurchaseOrderItemType(DjangoObjectType):
+    class Meta:
+        model = PurchaseOrderItem
+        fields = "__all__"
+
+
+class PurchaseOrderType(DjangoObjectType):
+    class Meta:
+        model = PurchaseOrder
+        fields = "__all__"
+
+
+class RawClothBatchType(DjangoObjectType):
+    available_meters = graphene.Float()
+    total_meters = graphene.Float()
+    cost_per_meter = graphene.Float()
+
+    class Meta:
+        model = RawClothBatch
+        fields = "__all__"
+
+    def resolve_available_meters(self, info):
+        return float(self.available_meters)
+
+    def resolve_total_meters(self, info):
+        return float(self.total_meters)
+
+    def resolve_cost_per_meter(self, info):
+        return float(self.cost_per_meter)
+
+
+class ReadymadeStockType(DjangoObjectType):
+    class Meta:
+        model = ReadymadeStock
+        fields = "__all__"
+
+
+class CuttingAssignmentType(DjangoObjectType):
+    class Meta:
+        model = CuttingAssignment
+        fields = "__all__"
+
+
+class StitchingJobType(DjangoObjectType):
+    class Meta:
+        model = StitchingJob
+        fields = "__all__"
+
+
+class FinishedProductType(DjangoObjectType):
+    profit_margin = graphene.Float()
+
+    class Meta:
+        model = FinishedProduct
+        fields = "__all__"
+
+    def resolve_profit_margin(self, info):
+        return float(self.profit_margin)
+
+
+class SalesOrderItemType(DjangoObjectType):
+    class Meta:
+        model = SalesOrderItem
+        fields = "__all__"
+
+
+class SalesOrderType(DjangoObjectType):
+    class Meta:
+        model = SalesOrder
+        fields = "__all__"
+
+
+class CreditPaymentType(DjangoObjectType):
+    class Meta:
+        model = CreditPayment
+        fields = "__all__"
+
+
+class CreditTransactionType(DjangoObjectType):
+    class Meta:
+        model = CreditTransaction
         fields = "__all__"
 
 
@@ -97,29 +167,23 @@ class NotificationType(DjangoObjectType):
         fields = "__all__"
 
 
-class ReplenishmentRequestType(DjangoObjectType):
-    class Meta:
-        model = ReplenishmentRequest
-        fields = "__all__"
-
-
 class SystemSettingsType(DjangoObjectType):
-    """Public-safe subset — excludes Twilio credentials."""
     class Meta:
         model = SystemSettings
-        fields = (
-            "app_name", "app_subtitle", "logo_url",
-            "primary_color", "accent_color", "default_dark_mode",
-            "whatsapp_enabled", "whatsapp_from_number",
-            "alert_email", "updated_at",
-        )
+        exclude = ("twilio_account_sid", "twilio_auth_token", "smtp_password", "smtp_user")
 
 
 class DashboardStats(graphene.ObjectType):
-    total_products = graphene.Int()
-    total_units = graphene.Int()
-    low_stock_products = graphene.Int()
-    total_vendors = graphene.Int()
-    pending_returns = graphene.Int()
-    damaged_units = graphene.Int()
-    inventory_value = graphene.Float()
+    total_raw_meters = graphene.Float()
+    total_finished_pieces = graphene.Int()
+    readymade_pieces = graphene.Int()
+    inhouse_pieces = graphene.Int()
+    active_purchase_orders = graphene.Int()
+    active_sales_orders = graphene.Int()
+    cutting_in_progress = graphene.Int()
+    stitching_in_progress = graphene.Int()
+    credit_outstanding = graphene.Float()
+    revenue_this_month = graphene.Float()
+    revenue_this_year = graphene.Float()
+    total_suppliers = graphene.Int()
+    total_buyers = graphene.Int()
