@@ -6,6 +6,7 @@ import { formatMoney, formatDateShort } from "@/app/lib/formatters";
 import CreatableSelect from "@/app/components/atoms/CreatableSelect";
 import SizeSelect from "@/app/components/atoms/SizeSelect";
 import { printDoc, fmtMoney, fmtDate } from "@/app/lib/print";
+import { downloadCsv } from "@/app/lib/csv";
 
 interface Props {
   orders: PurchaseOrder[]; suppliers: Supplier[]; warehouses: WarehouseLocation[]
@@ -34,6 +35,8 @@ export default function PurchaseOrders({ orders, suppliers, warehouses, categori
   const [showNew, setShowNew] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -47,10 +50,14 @@ export default function PurchaseOrders({ orders, suppliers, warehouses, categori
   const [items, setItems] = useState<POItem[]>([emptyItem()]);
 
   const canEdit = isSuperAdmin || isAdmin || isManager;
-  const filtered = orders.filter(o =>
-    (o.poNumber.toLowerCase().includes(search.toLowerCase()) || o.supplier.name.toLowerCase().includes(search.toLowerCase())) &&
-    (!statusFilter || o.status === statusFilter)
-  );
+  const filtered = orders.filter(o => {
+    const q = search.toLowerCase();
+    if (q && !o.poNumber.toLowerCase().includes(q) && !o.supplier.name.toLowerCase().includes(q)) return false;
+    if (statusFilter && o.status !== statusFilter) return false;
+    if (dateFrom && o.orderDate < dateFrom) return false;
+    if (dateTo && o.orderDate > dateTo) return false;
+    return true;
+  });
 
   async function createCategory(name: string): Promise<string> {
     const r = await onMutate(`mutation C($n:String!){createClothCategory(name:$n,description:""){category{id name}}}`, { n: name });
@@ -151,8 +158,18 @@ export default function PurchaseOrders({ orders, suppliers, warehouses, categori
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <h2 style={{ margin: 0 }}>Purchase Orders <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 16 }}>({orders.length})</span></h2>
-        {canEdit && <button onClick={() => { setShowNew(true); resetForm(); }}
-          style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--primary)", color: "#fff", fontWeight: 600, cursor: "pointer" }}>+ New Order</button>}
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={() => downloadCsv(`purchase_orders_${new Date().toISOString().slice(0,10)}.csv`, filtered.map(o => ({
+            "PO Number": o.poNumber, "Supplier": o.supplier.name, "Type": o.orderType,
+            "Order Date": o.orderDate, "Expected Delivery": o.expectedDelivery || "",
+            "Total (₹)": o.totalAmount, "Status": PO_STATUS_LABELS[o.status] || o.status,
+          })))}
+            style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+            ⬇ Export CSV
+          </button>
+          {canEdit && <button onClick={() => { setShowNew(true); resetForm(); }}
+            style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: "var(--primary)", color: "#fff", fontWeight: 600, cursor: "pointer" }}>+ New Order</button>}
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
@@ -163,6 +180,16 @@ export default function PurchaseOrders({ orders, suppliers, warehouses, categori
           <option value="">All statuses</option>
           {STATUSES.map(s => <option key={s} value={s}>{PO_STATUS_LABELS[s]}</option>)}
         </select>
+        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="From date"
+          style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: dateFrom ? "var(--fg)" : "var(--muted)", fontSize: 14 }} />
+        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} title="To date"
+          style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: dateTo ? "var(--fg)" : "var(--muted)", fontSize: 14 }} />
+        {(dateFrom || dateTo) && (
+          <button onClick={() => { setDateFrom(""); setDateTo(""); }}
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 13, cursor: "pointer" }}>
+            Clear dates
+          </button>
+        )}
       </div>
 
       {/* ── New PO modal ── */}

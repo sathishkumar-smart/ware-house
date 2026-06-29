@@ -38,9 +38,16 @@ function Empty() {
   return <div style={{ textAlign: "center", padding: "48px 0", color: "var(--muted)", fontSize: 13 }}>No data yet — create some orders to see analytics</div>;
 }
 
+const PERIODS = [
+  { label: "Last 3 months", months: 3 },
+  { label: "Last 6 months", months: 6 },
+  { label: "Last 12 months", months: 12 },
+];
+
 export default function Analytics({ gql }: { gql: (q: string) => Promise<AnalyticsData> }) {
   const [data, setData] = useState<AnalyticsData["analyticsStats"] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState(12);
 
   useEffect(() => {
     gql(`{
@@ -64,16 +71,43 @@ export default function Analytics({ gql }: { gql: (q: string) => Promise<Analyti
   }
 
   const { monthlyRevenue, stockByCategory, topBuyers } = data;
+  const revenueFiltered = [...monthlyRevenue].sort((a, b) => a.month.localeCompare(b.month)).slice(-period);
+  const totalRevenue = revenueFiltered.reduce((s, m) => s + m.revenue, 0);
+  const totalOrders = revenueFiltered.reduce((s, m) => s + m.orderCount, 0);
 
   return (
     <div style={{ padding: 28 }}>
-      <h2 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 24px" }}>Analytics</h2>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Analytics</h2>
+        <div style={{ display: "flex", gap: 6 }}>
+          {PERIODS.map(p => (
+            <button key={p.months} onClick={() => setPeriod(p.months)}
+              style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                background: period === p.months ? "var(--primary)" : "transparent",
+                color: period === p.months ? "#fff" : "var(--ink)" }}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Summary stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16, marginBottom: 24 }}>
+        <div style={{ background: "var(--paper)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: "var(--muted)" }}>Revenue ({PERIODS.find(p => p.months === period)?.label})</div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 8 }}>₹{totalRevenue.toLocaleString("en-IN")}</div>
+        </div>
+        <div style={{ background: "var(--paper)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: "var(--muted)" }}>Orders ({PERIODS.find(p => p.months === period)?.label})</div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 8 }}>{totalOrders}</div>
+        </div>
+      </div>
 
       {/* Monthly Revenue */}
-      <Section title="Monthly Revenue — Last 12 Months">
-        {monthlyRevenue.length === 0 ? <Empty /> : (
+      <Section title={`Monthly Revenue — ${PERIODS.find(p => p.months === period)?.label}`}>
+        {revenueFiltered.length === 0 ? <Empty /> : (
           <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={monthlyRevenue} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+            <AreaChart data={revenueFiltered} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />

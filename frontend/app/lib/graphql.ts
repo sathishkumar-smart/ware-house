@@ -158,5 +158,8 @@ export const DASHBOARD_QUERY = `
       rawClothBatch { id batchNumber }
       warehouse { id name }
     }
+    allAuditLogs(limit: 500) {
+      id entityType entityId action actorName detail createdAt
+    }
   }
 `;

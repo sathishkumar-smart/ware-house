@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Truck, UserCheck, ShoppingCart, Package, Boxes,
   Scissors, Shirt, Tag, Receipt, Landmark, RefreshCcw,
   Users, Warehouse, Bell, Settings2, ChevronLeft, ChevronRight,
-  Sun, Moon, LogOut, BarChart2, Menu, X, User,
+  Sun, Moon, LogOut, BarChart2, Menu, X, User, ClipboardList,
 } from "lucide-react";
 
 import Login from "@/app/components/organisms/Login";
@@ -28,9 +28,11 @@ import Notifications from "@/app/components/organisms/Notifications";
 import Analytics from "@/app/components/organisms/Analytics";
 import Settings from "@/app/components/organisms/Settings";
 import Profile from "@/app/components/organisms/Profile";
+import AuditLogs from "@/app/components/organisms/AuditLogs";
 
 import CreatableSelect from "@/app/components/atoms/CreatableSelect";
 import Modal from "@/app/components/atoms/Modal";
+import { PageSkeleton } from "@/app/components/atoms/Skeleton";
 import FcmManager from "@/app/components/atoms/FcmManager";
 import SizeSelect from "@/app/components/atoms/SizeSelect";
 import type { AppSettings, Tab } from "@/app/types";
@@ -41,17 +43,18 @@ const ALL_TABS: Tab[] = [
   "dashboard", "analytics", "suppliers", "buyers", "purchase_orders",
   "raw_cloth", "readymade_stock", "cutting", "stitching",
   "finished_products", "sales_orders", "credit", "returns",
-  "employees", "warehouses", "notifications", "settings", "profile",
+  "employees", "warehouses", "notifications", "audit_log", "settings", "profile",
 ];
 
 function getVisibleTabs(role: string): Tab[] {
   const profileTab: Tab[] = ["profile"];
   if (role === "SUPER_ADMIN") return [...ALL_TABS.filter(t => t !== "profile"), ...profileTab];
-  if (["ADMIN", "MANAGER"].includes(role)) return [...ALL_TABS.filter(t => t !== "profile" && t !== "settings"), ...profileTab];
+  if (["ADMIN"].includes(role)) return [...ALL_TABS.filter(t => t !== "profile" && t !== "settings"), ...profileTab];
+  if (["MANAGER"].includes(role)) return [...ALL_TABS.filter(t => t !== "profile" && t !== "settings" && t !== "audit_log"), ...profileTab];
   if (role === "CUTTING_MASTER") return ["dashboard", "cutting", "notifications", ...profileTab];
   if (role === "TAILOR") return ["dashboard", "stitching", "notifications", ...profileTab];
   if (role === "STORE_KEEPER") return ["dashboard", "raw_cloth", "readymade_stock", "finished_products", "notifications", ...profileTab];
-  if (role === "AUDITOR") return ["dashboard", "analytics", "suppliers", "buyers", "purchase_orders", "raw_cloth", "readymade_stock", "finished_products", "sales_orders", "credit", "returns", "notifications", ...profileTab];
+  if (role === "AUDITOR") return ["dashboard", "analytics", "suppliers", "buyers", "purchase_orders", "raw_cloth", "readymade_stock", "finished_products", "sales_orders", "credit", "returns", "notifications", "audit_log", ...profileTab];
   return ["dashboard", "notifications", ...profileTab];
 }
 
@@ -66,7 +69,7 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
   { label: "Production", tabs: ["cutting", "stitching", "finished_products"] },
   { label: "Sales", tabs: ["sales_orders", "credit", "returns"] },
   { label: "Admin", tabs: ["employees", "warehouses"] },
-  { label: "System", tabs: ["notifications", "settings"] },
+  { label: "System", tabs: ["notifications", "audit_log", "settings"] },
 ];
 
 const TAB_ICONS: Record<Tab, React.ReactNode> = {
@@ -86,6 +89,7 @@ const TAB_ICONS: Record<Tab, React.ReactNode> = {
   employees: <Users size={16} />,
   warehouses: <Warehouse size={16} />,
   notifications: <Bell size={16} />,
+  audit_log: <ClipboardList size={16} />,
   settings: <Settings2 size={16} />,
   profile: <User size={16} />,
 };
@@ -302,12 +306,15 @@ export default function Home() {
   const [token, setToken] = useState<string | null>(null);
   const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("dashboard");
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [directEntry, setDirectEntry] = useState<"raw_cloth" | "readymade" | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [rawClothSearch, setRawClothSearch] = useState("");
+  const [readymadeSearch, setReadymadeSearch] = useState("");
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => { applyDarkMode(darkMode); }, [darkMode]);
@@ -322,12 +329,15 @@ export default function Home() {
     const stored = localStorage.getItem("jwt");
     if (stored) {
       setToken(stored);
+      setInitializing(false);
     } else if (localStorage.getItem("refreshToken")) {
       refreshAccessToken().then(t => {
         if (t) setToken(t); else setLoading(false);
+        setInitializing(false);
       });
     } else {
       setLoading(false);
+      setInitializing(false);
     }
   }, []);
 
@@ -401,13 +411,28 @@ export default function Home() {
     return result;
   }, [token, loadData]);
 
-  if (!token || (!data && loading)) {
+  const AppSkeleton = () => (
+    <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex" }}>
+      <div style={{ width: 220, background: "var(--paper)", borderRight: "1px solid var(--line)", padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} style={{ height: 32, borderRadius: 8, background: "linear-gradient(90deg, var(--line) 25%, var(--canvas) 50%, var(--line) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }} />
+        ))}
+      </div>
+      <div style={{ flex: 1 }}><PageSkeleton /></div>
+    </div>
+  );
+
+  if (initializing) return <AppSkeleton />;
+
+  if (!token) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
-        {loading ? <div style={{ color: "var(--muted)", fontSize: 14 }}>Loading…</div> : <Login onLogin={handleLogin} />}
+        <Login onLogin={handleLogin} />
       </div>
     );
   }
+
+  if (!data && loading) return <AppSkeleton />;
 
   if (error) {
     return (
@@ -700,7 +725,9 @@ export default function Home() {
         )}
         {currentTab === "raw_cloth" && (
           <div style={{ padding: 24 }}>
-            <h2 style={{ margin: "0 0 20px" }}>Raw Cloth Batches <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 16 }}>({(data?.rawClothBatches || []).length})</span></h2>
+            <h2 style={{ margin: "0 0 16px" }}>Raw Cloth Batches <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 16 }}>({(data?.rawClothBatches || []).length})</span></h2>
+            <input placeholder="Search batch, category, color or warehouse…" value={rawClothSearch} onChange={e => setRawClothSearch(e.target.value)}
+              style={{ padding: "9px 14px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--canvas)", color: "var(--ink)", fontSize: 14, width: "100%", boxSizing: "border-box", marginBottom: 16 }} />
             <div style={{ background: "var(--paper)", borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
@@ -711,7 +738,10 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(data?.rawClothBatches || []).map((b: AppData) => (
+                  {(data?.rawClothBatches || []).filter((b: AppData) => {
+                    const q = rawClothSearch.toLowerCase();
+                    return !q || b.batchNumber?.toLowerCase().includes(q) || b.clothCategory?.name?.toLowerCase().includes(q) || b.clothColor?.name?.toLowerCase().includes(q) || b.warehouse?.name?.toLowerCase().includes(q);
+                  }).map((b: AppData) => (
                     <tr key={b.id} style={{ borderBottom: "1px solid var(--border)" }}>
                       <td style={{ padding: "11px 14px", fontWeight: 600 }}>{b.batchNumber}</td>
                       <td style={{ padding: "11px 14px" }}>{b.clothCategory?.name}</td>
@@ -741,7 +771,9 @@ export default function Home() {
         )}
         {currentTab === "readymade_stock" && (
           <div style={{ padding: 24 }}>
-            <h2 style={{ margin: "0 0 20px" }}>Readymade Stock <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 16 }}>({(data?.readymadeStock || []).length})</span></h2>
+            <h2 style={{ margin: "0 0 16px" }}>Readymade Stock <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 16 }}>({(data?.readymadeStock || []).length})</span></h2>
+            <input placeholder="Search item type, color, size or warehouse…" value={readymadeSearch} onChange={e => setReadymadeSearch(e.target.value)}
+              style={{ padding: "9px 14px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--canvas)", color: "var(--ink)", fontSize: 14, width: "100%", boxSizing: "border-box", marginBottom: 16 }} />
             <div style={{ background: "var(--paper)", borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
@@ -752,7 +784,10 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(data?.readymadeStock || []).map((s: AppData) => (
+                  {(data?.readymadeStock || []).filter((s: AppData) => {
+                    const q = readymadeSearch.toLowerCase();
+                    return !q || s.itemType?.name?.toLowerCase().includes(q) || s.clothColor?.name?.toLowerCase().includes(q) || s.size?.toLowerCase().includes(q) || s.warehouse?.name?.toLowerCase().includes(q);
+                  }).map((s: AppData) => (
                     <tr key={s.id} style={{ borderBottom: "1px solid var(--border)" }}>
                       <td style={{ padding: "11px 14px", fontWeight: 600 }}>{s.itemType?.name}</td>
                       <td style={{ padding: "11px 14px" }}>
@@ -803,10 +838,18 @@ export default function Home() {
             products={data?.finishedProducts || []}
             isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} isManager={isManager} isStoreKeeper={isStoreKeeper}
             onMutate={mutate}
+            gql={(q, v) => graphql(q, v || {}, token!)}
           />
         )}
         {currentTab === "sales_orders" && (
-          <SalesOrders orders={data?.salesOrders || []} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} isManager={isManager} onMutate={mutate} />
+          <SalesOrders
+            orders={data?.salesOrders || []}
+            buyers={data?.buyers || []}
+            warehouses={data?.warehouseLocations || []}
+            finishedProducts={data?.finishedProducts || []}
+            isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} isManager={isManager}
+            onMutate={mutate}
+          />
         )}
         {currentTab === "credit" && (
           <Credit credits={data?.creditTransactions || []} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} isManager={isManager} onMutate={mutate} />
@@ -828,6 +871,9 @@ export default function Home() {
         )}
         {currentTab === "notifications" && (
           <Notifications notifications={data?.notifications || []} onMutate={mutate} onNavigate={(t) => setTab(t as Tab)} />
+        )}
+        {currentTab === "audit_log" && (
+          <AuditLogs logs={data?.allAuditLogs || []} />
         )}
         {currentTab === "settings" && (
           <Settings settings={data?.systemSettings || {}} isSuperAdmin={isSuperAdmin} onMutate={mutate} />

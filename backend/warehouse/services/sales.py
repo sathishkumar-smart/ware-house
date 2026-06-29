@@ -12,7 +12,8 @@ from warehouse.permissions import get_warehouse
 
 
 def create_sales_order(*, user, buyer_id, payment_mode, warehouse_id,
-                       order_date=None, expected_delivery=None, discount=0, notes="", items):
+                       order_date=None, expected_delivery=None, discount=0, notes="",
+                       amount_paid=None, items):
     """
     items = [{finished_product_id, quantity, unit_price}]
     """
@@ -61,9 +62,13 @@ def create_sales_order(*, user, buyer_id, payment_mode, warehouse_id,
 
         discount_amt = Decimal(str(discount))
         total = subtotal - discount_amt
-        amount_paid = total if payment_mode.upper() == SalesOrder.PaymentMode.PAID else (
-            Decimal(str(items[0].get("amount_paid", 0))) if payment_mode.upper() == SalesOrder.PaymentMode.PARTIAL else Decimal("0.00")
-        )
+        if payment_mode.upper() == SalesOrder.PaymentMode.PAID:
+            amount_paid_dec = total
+        elif payment_mode.upper() == SalesOrder.PaymentMode.PARTIAL:
+            amount_paid_dec = min(Decimal(str(amount_paid or 0)), total)
+        else:
+            amount_paid_dec = Decimal("0.00")
+        amount_paid = amount_paid_dec
         so.subtotal = subtotal
         so.discount = discount_amt
         so.total_amount = total

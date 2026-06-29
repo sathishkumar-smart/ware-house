@@ -128,6 +128,13 @@ export interface NotificationItem {
 }
 export type Notification = NotificationItem
 
+// ─── audit log ────────────────────────────────────────────────────────────────
+
+export interface AuditLog {
+  id: string; entityType: string; entityId: string; action: string
+  actorName: string; detail: Record<string, unknown>; createdAt: string
+}
+
 // ─── dashboard ────────────────────────────────────────────────────────────────
 
 export interface DashboardStats {
@@ -159,7 +166,7 @@ export type Tab =
   | "purchase_orders" | "raw_cloth" | "readymade_stock"
   | "cutting" | "stitching" | "finished_products"
   | "sales_orders" | "credit" | "returns"
-  | "employees" | "warehouses" | "notifications" | "settings" | "profile"
+  | "employees" | "warehouses" | "notifications" | "audit_log" | "settings" | "profile"
 
 export interface Modal {
   type: string

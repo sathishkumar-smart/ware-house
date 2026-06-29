@@ -25,6 +25,7 @@ class CreateSalesOrder(graphene.Mutation):
         expected_delivery = graphene.Date()
         discount = graphene.Float()
         notes = graphene.String()
+        amount_paid = graphene.Float()
 
     sales_order = graphene.Field(SalesOrderType)
 
