@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { CuttingAssignment, Employee, RawClothBatch, ItemType } from "@/app/types";
-import { CUTTING_STATUS_LABELS, STATUS_BADGE_COLORS } from "@/app/lib/constants";
+import { CUTTING_STATUS_LABELS } from "@/app/lib/constants";
 import { formatDateShort } from "@/app/lib/formatters";
 import Modal from "@/app/components/atoms/Modal";
 
@@ -29,12 +29,63 @@ const LBL: React.CSSProperties = {
   fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: 0.4, textTransform: "uppercase",
 };
 
-function Badge({ s }: { s: string }) {
-  const color = STATUS_BADGE_COLORS[s] || "#888";
+// ── Status step trail ──────────────────────────────────────────────────────────
+
+const CUTTING_STEPS = [
+  { key: "PENDING",     label: "Pending" },
+  { key: "IN_PROGRESS", label: "In Progress" },
+  { key: "PARTIAL",     label: "Partial" },
+  { key: "COMPLETED",   label: "Completed" },
+];
+
+const STEP_COLORS: Record<string, string> = {
+  PENDING: "#94a3b8", IN_PROGRESS: "#f59e0b", PARTIAL: "#6366f1", COMPLETED: "#10b981",
+};
+
+function StepTrail({ status }: { status: string }) {
+  const currentIdx = CUTTING_STEPS.findIndex(s => s.key === status);
   return (
-    <span style={{ padding: "3px 10px", borderRadius: 99, fontSize: 11, fontWeight: 700, background: color + "22", color, border: `1px solid ${color}33` }}>
-      {CUTTING_STATUS_LABELS[s] || s}
-    </span>
+    <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 10 }}>
+      {CUTTING_STEPS.map((step, i) => {
+        const done = i < currentIdx;
+        const active = i === currentIdx;
+        const color = done || active ? STEP_COLORS[step.key] : "var(--line)";
+        return (
+          <div key={step.key} style={{ display: "flex", alignItems: "center", flex: i < CUTTING_STEPS.length - 1 ? 1 : undefined }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+              <div style={{
+                width: active ? 14 : 10, height: active ? 14 : 10,
+                borderRadius: "50%",
+                background: done || active ? color : "var(--canvas)",
+                border: `2px solid ${color}`,
+                boxShadow: active ? `0 0 0 3px ${color}28` : "none",
+                transition: "all .2s",
+                flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, color: done || active ? color : "var(--muted)", whiteSpace: "nowrap", letterSpacing: 0.2 }}>
+                {step.label}
+              </span>
+            </div>
+            {i < CUTTING_STEPS.length - 1 && (
+              <div style={{ flex: 1, height: 2, background: done ? STEP_COLORS[CUTTING_STEPS[i + 1]?.key] || "var(--primary)" : "var(--line)", margin: "0 2px", marginBottom: 14, transition: "background .3s" }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProgressBar({ value, max, color = "var(--primary)" }: { value: number; max: number; color?: string }) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div style={{ position: "relative", height: 8, background: "var(--line)", borderRadius: 99, overflow: "hidden" }}>
+      <div style={{
+        width: `${pct}%`, height: "100%", borderRadius: 99,
+        background: pct === 100 ? "#10b981" : pct > 60 ? "#6366f1" : pct > 30 ? "#f59e0b" : color,
+        transition: "width .4s ease",
+      }} />
+    </div>
   );
 }
 
@@ -81,20 +132,14 @@ export default function Cutting({ assignments, batches, cuttingMasters, itemType
     try {
       await onMutate(
         `mutation U($id:ID!,$status:String,$pc:Int,$cu:Float,$cw:Float){updateCuttingAssignment(id:$id,status:$status,piecesCompleted:$pc,clothUsed:$cu,clothWasted:$cw){assignment{id status piecesCompleted}}}`,
-        {
-          id: selected.id,
-          status: update.status || undefined,
-          pc: Number.isFinite(pc) ? pc : undefined,
-          cu: Number.isFinite(cu) ? cu : undefined,
-          cw: Number.isFinite(cw) ? cw : undefined,
-        }
+        { id: selected.id, status: update.status || undefined, pc: Number.isFinite(pc) ? pc : undefined, cu: Number.isFinite(cu) ? cu : undefined, cw: Number.isFinite(cw) ? cw : undefined }
       );
       setSelected(null);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Failed"); }
     finally { setLoading(false); }
   }
 
-  function sel(label: string, val: string, onChange: (v: string) => void, opts: { value: string; label: string }[]) {
+  function selField(label: string, val: string, onChange: (v: string) => void, opts: { value: string; label: string }[]) {
     return (
       <label style={LBL}>{label}
         <select value={val} onChange={e => onChange(e.target.value)} style={I}>
@@ -107,10 +152,11 @@ export default function Cutting({ assignments, batches, cuttingMasters, itemType
 
   return (
     <div style={{ padding: 24 }}>
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Cutting Assignments</h2>
-          <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: 13 }}>{assignments.length} total assignments</p>
+          <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: 13 }}>{assignments.length} total · {assignments.filter(a => a.status === "IN_PROGRESS" || a.status === "PARTIAL").length} active</p>
         </div>
         {canAssign && (
           <button onClick={() => { setShowForm(true); setError(""); }} className="primary-button">
@@ -119,7 +165,8 @@ export default function Cutting({ assignments, batches, cuttingMasters, itemType
         )}
       </div>
 
-      <div style={{ marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
+      {/* Filters */}
+      <div style={{ marginBottom: 20, display: "flex", gap: 12, flexWrap: "wrap" }}>
         <input placeholder="Search master, cloth or item…" value={search} onChange={e => setSearch(e.target.value)}
           style={{ ...I, flex: 1, minWidth: 200, width: "auto" }} />
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ ...I, width: "auto", minWidth: 180 }}>
@@ -128,62 +175,38 @@ export default function Cutting({ assignments, batches, cuttingMasters, itemType
         </select>
       </div>
 
+      {/* New Assignment modal */}
       {showForm && (
-        <Modal
-          title="New Cutting Assignment"
-          subtitle="Assign cloth from a batch to a cutting master"
-          onClose={() => { setShowForm(false); setError(""); }}
-          width={520}
-          footer={
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={createAssignment} disabled={loading || !form.batchId || !form.masterId || !form.itemTypeId} style={BTN_PRI}>
-                {loading ? "Assigning…" : "Create Assignment"}
-              </button>
-              <button onClick={() => { setShowForm(false); setError(""); }} style={BTN_SEC}>Cancel</button>
-            </div>
-          }
-        >
+        <Modal title="New Cutting Assignment" subtitle="Assign cloth from a batch to a cutting master"
+          onClose={() => { setShowForm(false); setError(""); }} width={520}
+          footer={<div style={{ display: "flex", gap: 10 }}>
+            <button onClick={createAssignment} disabled={loading || !form.batchId || !form.masterId || !form.itemTypeId} style={BTN_PRI}>{loading ? "Assigning…" : "Create Assignment"}</button>
+            <button onClick={() => { setShowForm(false); setError(""); }} style={BTN_SEC}>Cancel</button>
+          </div>}>
           {error && <div style={{ background: "#fff0ef", border: "1px solid #f1cbc8", color: "#8d3e39", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{error}</div>}
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {sel("Raw Cloth Batch *", form.batchId, v => setForm(p => ({ ...p, batchId: v })),
+            {selField("Raw Cloth Batch *", form.batchId, v => setForm(p => ({ ...p, batchId: v })),
               batches.map(b => ({ value: b.id, label: `${b.batchNumber} — ${b.clothCategory.name} ${b.clothColor.name} (${b.availableMeters}m available)` })))}
-            {sel("Cutting Master *", form.masterId, v => setForm(p => ({ ...p, masterId: v })),
-              cuttingMasters.map(m => ({ value: m.id, label: m.username })))}
-            {sel("Item Type *", form.itemTypeId, v => setForm(p => ({ ...p, itemTypeId: v })),
-              itemTypes.map(t => ({ value: t.id, label: t.name })))}
+            {selField("Cutting Master *", form.masterId, v => setForm(p => ({ ...p, masterId: v })), cuttingMasters.map(m => ({ value: m.id, label: m.username })))}
+            {selField("Item Type *", form.itemTypeId, v => setForm(p => ({ ...p, itemTypeId: v })), itemTypes.map(t => ({ value: t.id, label: t.name })))}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              <label style={LBL}>Meters Assigned *
-                <input type="number" step="0.01" value={form.meters} placeholder="0.00"
-                  onChange={e => setForm(p => ({ ...p, meters: e.target.value }))} style={I} />
-              </label>
-              <label style={LBL}>Target Pieces *
-                <input type="number" value={form.targetPieces} placeholder="0"
-                  onChange={e => setForm(p => ({ ...p, targetPieces: e.target.value }))} style={I} />
-              </label>
+              <label style={LBL}>Meters Assigned *<input type="number" step="0.01" value={form.meters} placeholder="0.00" onChange={e => setForm(p => ({ ...p, meters: e.target.value }))} style={I} /></label>
+              <label style={LBL}>Target Pieces *<input type="number" value={form.targetPieces} placeholder="0" onChange={e => setForm(p => ({ ...p, targetPieces: e.target.value }))} style={I} /></label>
             </div>
-            <label style={LBL}>Notes
-              <input value={form.notes} placeholder="Optional notes…"
-                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} style={I} />
-            </label>
+            <label style={LBL}>Notes<input value={form.notes} placeholder="Optional notes…" onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} style={I} /></label>
           </div>
         </Modal>
       )}
 
+      {/* Update modal */}
       {selected && (
-        <Modal
-          title={`Update: ${selected.assignmentNumber}`}
+        <Modal title={`Update: ${selected.assignmentNumber}`}
           subtitle={`${selected.itemType.name} · ${selected.metersAssigned}m · ${selected.targetPieces} target pieces`}
-          onClose={() => { setSelected(null); setError(""); }}
-          width={460}
-          footer={
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={saveUpdate} disabled={loading} style={BTN_PRI}>
-                {loading ? "Saving…" : "Save Update"}
-              </button>
-              <button onClick={() => { setSelected(null); setError(""); }} style={BTN_SEC}>Cancel</button>
-            </div>
-          }
-        >
+          onClose={() => { setSelected(null); setError(""); }} width={460}
+          footer={<div style={{ display: "flex", gap: 10 }}>
+            <button onClick={saveUpdate} disabled={loading} style={BTN_PRI}>{loading ? "Saving…" : "Save Update"}</button>
+            <button onClick={() => { setSelected(null); setError(""); }} style={BTN_SEC}>Cancel</button>
+          </div>}>
           {error && <div style={{ background: "#fff0ef", border: "1px solid #f1cbc8", color: "#8d3e39", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{error}</div>}
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <label style={LBL}>Status
@@ -194,8 +217,7 @@ export default function Cutting({ assignments, batches, cuttingMasters, itemType
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
               {([["Pieces Done", "piecesCompleted"], ["Cloth Used (m)", "clothUsed"], ["Wasted (m)", "clothWasted"]] as [string, string][]).map(([label, field]) => (
                 <label key={field} style={LBL}>{label}
-                  <input type="number" step="0.01"
-                    value={(update as unknown as Record<string, number>)[field] || 0}
+                  <input type="number" step="0.01" value={(update as unknown as Record<string, number>)[field] || 0}
                     onChange={e => setUpdate(p => ({ ...p, [field]: +e.target.value }))} style={I} />
                 </label>
               ))}
@@ -204,51 +226,77 @@ export default function Cutting({ assignments, batches, cuttingMasters, itemType
         </Modal>
       )}
 
-      <div style={{ background: "var(--paper)", borderRadius: 12, border: "1px solid var(--line)", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "var(--th-bg)", textAlign: "left" }}>
-              {["Assignment", "Item Type", "Master", "Meters", "Progress", "Date", "Status", ""].map(h => (
-                <th key={h} style={{ padding: "11px 16px", fontWeight: 700, fontSize: 10, color: "var(--muted)", letterSpacing: 0.5, textTransform: "uppercase", borderBottom: "1px solid var(--line)" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(a => (
-              <tr key={a.id} style={{ borderBottom: "1px solid var(--panel-border)" }}>
-                <td style={{ padding: "13px 16px" }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{a.assignmentNumber}</div>
-                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{a.targetPieces} pieces target</div>
-                </td>
-                <td style={{ padding: "13px 16px", fontSize: 13 }}>{a.itemType.name}</td>
-                <td style={{ padding: "13px 16px", fontSize: 13, fontWeight: 600 }}>{a.cuttingMaster.username}</td>
-                <td style={{ padding: "13px 16px", fontSize: 13 }}>{a.metersAssigned}m</td>
-                <td style={{ padding: "13px 16px" }}>
-                  <div style={{ fontSize: 12, marginBottom: 5 }}>
-                    {a.piecesCompleted} <span style={{ color: "var(--muted)" }}>/ {a.targetPieces}</span>
+      {/* ── Card grid ── */}
+      {filtered.length === 0 ? (
+        <div style={{ padding: "64px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>No assignments found</div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: 16 }}>
+          {filtered.map(a => {
+            const piecePct = a.targetPieces > 0 ? Math.min(100, (a.piecesCompleted / a.targetPieces) * 100) : 0;
+            const meterPct = a.metersAssigned > 0 ? Math.min(100, (a.clothUsed / a.metersAssigned) * 100) : 0;
+            const statusColor = STEP_COLORS[a.status] || "#94a3b8";
+            return (
+              <div key={a.id} style={{
+                background: "var(--paper)", borderRadius: 14, border: "1px solid var(--line)",
+                padding: 18, boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
+                borderLeft: `3px solid ${statusColor}`,
+              }}>
+                {/* Card header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: 0.3 }}>{a.assignmentNumber}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginTop: 1 }}>{a.itemType.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+                      ✂ {a.cuttingMaster.username} &nbsp;·&nbsp; {a.rawClothBatch.batchNumber} {a.rawClothBatch.clothColor.name}
+                    </div>
                   </div>
-                  <div style={{ width: 80, height: 5, background: "var(--line)", borderRadius: 3 }}>
-                    <div style={{ width: `${Math.min(100, (a.piecesCompleted / (a.targetPieces || 1)) * 100)}%`, height: "100%", background: "var(--primary)", borderRadius: 3 }} />
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                    <span style={{ fontSize: 11, color: "var(--muted)" }}>{formatDateShort(a.assignedDate)}</span>
+                    {canUpdate && (
+                      <button
+                        onClick={() => { setSelected(a); setUpdate({ piecesCompleted: Number(a.piecesCompleted) || 0, clothUsed: Number(a.clothUsed) || 0, clothWasted: Number(a.clothWasted) || 0, status: a.status }); setError(""); }}
+                        style={{ padding: "4px 12px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--canvas)", cursor: "pointer", fontSize: 11, fontWeight: 700, color: "var(--primary)" }}>
+                        Update
+                      </button>
+                    )}
                   </div>
-                </td>
-                <td style={{ padding: "13px 16px", fontSize: 12, color: "var(--muted)" }}>{formatDateShort(a.assignedDate)}</td>
-                <td style={{ padding: "13px 16px" }}><Badge s={a.status} /></td>
-                <td style={{ padding: "13px 16px" }}>
-                  {canUpdate && (
-                    <button
-                      onClick={() => { setSelected(a); setUpdate({ piecesCompleted: Number(a.piecesCompleted) || 0, clothUsed: Number(a.clothUsed) || 0, clothWasted: Number(a.clothWasted) || 0, status: a.status }); setError(""); }}
-                      style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
-                    >Update</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: "56px 20px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No assignments found</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                </div>
+
+                {/* Step trail */}
+                <StepTrail status={a.status} />
+
+                {/* Pieces progress */}
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Pieces</span>
+                    <span style={{ fontSize: 12, fontWeight: 700 }}>
+                      <span style={{ color: piecePct === 100 ? "#10b981" : "var(--ink)" }}>{a.piecesCompleted}</span>
+                      <span style={{ color: "var(--muted)", fontWeight: 400 }}> / {a.targetPieces}</span>
+                      <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 11 }}> ({Math.round(piecePct)}%)</span>
+                    </span>
+                  </div>
+                  <ProgressBar value={a.piecesCompleted} max={a.targetPieces} />
+                </div>
+
+                {/* Cloth usage */}
+                {(a.clothUsed > 0 || a.metersAssigned > 0) && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.3 }}>Cloth used</span>
+                      <span style={{ fontSize: 12 }}>
+                        <span style={{ fontWeight: 700 }}>{a.clothUsed}m</span>
+                        <span style={{ color: "var(--muted)" }}> / {a.metersAssigned}m</span>
+                        {a.clothWasted > 0 && <span style={{ color: "#f59e0b", marginLeft: 6, fontSize: 11 }}>· {a.clothWasted}m waste</span>}
+                      </span>
+                    </div>
+                    <ProgressBar value={a.clothUsed} max={a.metersAssigned} color="#6366f1" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
