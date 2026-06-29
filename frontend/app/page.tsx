@@ -306,6 +306,7 @@ export default function Home() {
   const [token, setToken] = useState<string | null>(null);
   const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("dashboard");
   const [darkMode, setDarkMode] = useState(false);
@@ -328,12 +329,15 @@ export default function Home() {
     const stored = localStorage.getItem("jwt");
     if (stored) {
       setToken(stored);
+      setInitializing(false);
     } else if (localStorage.getItem("refreshToken")) {
       refreshAccessToken().then(t => {
         if (t) setToken(t); else setLoading(false);
+        setInitializing(false);
       });
     } else {
       setLoading(false);
+      setInitializing(false);
     }
   }, []);
 
@@ -407,6 +411,19 @@ export default function Home() {
     return result;
   }, [token, loadData]);
 
+  const AppSkeleton = () => (
+    <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex" }}>
+      <div style={{ width: 220, background: "var(--paper)", borderRight: "1px solid var(--line)", padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} style={{ height: 32, borderRadius: 8, background: "linear-gradient(90deg, var(--line) 25%, var(--canvas) 50%, var(--line) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }} />
+        ))}
+      </div>
+      <div style={{ flex: 1 }}><PageSkeleton /></div>
+    </div>
+  );
+
+  if (initializing) return <AppSkeleton />;
+
   if (!token) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
@@ -415,18 +432,7 @@ export default function Home() {
     );
   }
 
-  if (!data && loading) {
-    return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex" }}>
-        <div style={{ width: 220, background: "var(--paper)", borderRight: "1px solid var(--line)", padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} style={{ height: 32, borderRadius: 8, background: "linear-gradient(90deg, var(--line) 25%, var(--canvas) 50%, var(--line) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }} />
-          ))}
-        </div>
-        <div style={{ flex: 1 }}><PageSkeleton /></div>
-      </div>
-    );
-  }
+  if (!data && loading) return <AppSkeleton />;
 
   if (error) {
     return (
