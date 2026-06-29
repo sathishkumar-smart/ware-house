@@ -93,6 +93,6 @@ def send_daily_low_stock_alert():
         title=f"⚠ {total} Critical Stock Alert{'s' if total > 1 else ''}",
         message=msg,
         level="CRITICAL",
-        link="inventory",
+        link="raw_cloth",
     )
     logger.info("Sent daily stock alert: %d items", total)

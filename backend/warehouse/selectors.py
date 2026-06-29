@@ -328,6 +328,15 @@ def get_audit_logs(*, entity_type: str, entity_id: str):
     return AuditLog.objects.filter(entity_type=entity_type, entity_id=entity_id).select_related("actor")[:100]
 
 
+def get_all_audit_logs(*, entity_type: str = "", actor_name: str = "", limit: int = 200):
+    qs = AuditLog.objects.select_related("actor")
+    if entity_type:
+        qs = qs.filter(entity_type__iexact=entity_type)
+    if actor_name:
+        qs = qs.filter(actor_name__icontains=actor_name)
+    return qs[:limit]
+
+
 # ─── analytics ────────────────────────────────────────────────────────────────
 
 def get_analytics_stats(user):

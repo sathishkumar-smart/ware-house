@@ -71,6 +71,7 @@ class Query(graphene.ObjectType):
     notifications = graphene.List(NotificationType, unread_only=graphene.Boolean())
     unread_notification_count = graphene.Int()
     audit_logs = graphene.List(AuditLogType, entity_type=graphene.String(required=True), entity_id=graphene.ID(required=True))
+    all_audit_logs = graphene.List(AuditLogType, entity_type=graphene.String(), actor_name=graphene.String(), limit=graphene.Int())
     analytics_stats = graphene.Field(AnalyticsStats)
     dashboard_stats = graphene.Field(DashboardStats)
 
@@ -163,6 +164,13 @@ class Query(graphene.ObjectType):
     @login_required
     def resolve_audit_logs(self, info, entity_type, entity_id):
         return selectors.get_audit_logs(entity_type=entity_type, entity_id=str(entity_id))
+
+    @login_required
+    def resolve_all_audit_logs(self, info, entity_type="", actor_name="", limit=200):
+        from warehouse.permissions import require_role
+        from warehouse.models import EmployeeProfile
+        require_role(info.context.user, EmployeeProfile.Role.ADMIN, EmployeeProfile.Role.AUDITOR)
+        return selectors.get_all_audit_logs(entity_type=entity_type, actor_name=actor_name, limit=limit)
 
     @login_required
     def resolve_analytics_stats(self, info):

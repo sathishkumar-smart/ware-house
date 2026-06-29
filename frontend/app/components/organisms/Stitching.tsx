@@ -45,10 +45,16 @@ export default function Stitching({ jobs, assignments, tailors, isAdmin, isSuper
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [search, setSearch] = useState("");
 
   const canAssign = isSuperAdmin || isAdmin || isManager;
   const canUpdate = canAssign || isTailor;
-  const filtered = jobs.filter(j => !statusFilter || j.status === statusFilter);
+  const q = search.toLowerCase();
+  const filtered = jobs.filter(j =>
+    (!statusFilter || j.status === statusFilter) &&
+    (!q || j.tailor.username.toLowerCase().includes(q) ||
+      j.cuttingAssignment.itemType.name.toLowerCase().includes(q))
+  );
   const readyAssignments = assignments.filter(a => a.status === "COMPLETED" && a.piecesCompleted > 0);
 
   async function createJob() {
@@ -95,7 +101,9 @@ export default function Stitching({ jobs, assignments, tailors, isAdmin, isSuper
         )}
       </div>
 
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <input placeholder="Search tailor or item type…" value={search} onChange={e => setSearch(e.target.value)}
+          style={{ ...I, flex: 1, minWidth: 200, width: "auto" }} />
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ ...I, width: "auto", minWidth: 180 }}>
           <option value="">All statuses</option>
           {Object.entries(STITCHING_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}

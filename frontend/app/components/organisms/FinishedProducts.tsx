@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { FinishedProduct } from "@/app/types";
 import { formatMoney, formatDateShort } from "@/app/lib/formatters";
+import { downloadCsv } from "@/app/lib/csv";
 
 interface Props {
   products: FinishedProduct[]
@@ -67,6 +68,15 @@ export default function FinishedProducts({ products, isAdmin, isSuperAdmin, isMa
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <h2 style={{ margin: 0 }}>Finished Goods <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 16 }}>({products.length} SKUs)</span></h2>
+        <button onClick={() => downloadCsv(`finished_goods_${new Date().toISOString().slice(0,10)}.csv`, filtered.map(p => ({
+          "SKU": p.sku, "Item Type": p.itemType.name, "Size": p.size || "", "Color": p.clothColor?.name || "",
+          "Source": p.source, "Quantity": p.quantity, "Sale Price (₹)": p.salePrice,
+          "Cost Price (₹)": p.costPrice, "Warehouse": p.warehouse?.name || "",
+          "Barcode": p.barcode, "Created": formatDateShort(p.createdAt),
+        })))}
+          style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+          ⬇ Export CSV
+        </button>
       </div>
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <input placeholder="Search SKU, item type, or barcode…" value={search} onChange={e => setSearch(e.target.value)}

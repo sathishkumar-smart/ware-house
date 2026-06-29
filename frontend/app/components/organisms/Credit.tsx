@@ -4,6 +4,7 @@ import type { CreditTransaction } from "@/app/types";
 import { CREDIT_STATUS_LABELS, STATUS_BADGE_COLORS } from "@/app/lib/constants";
 import { formatMoney, formatDateShort } from "@/app/lib/formatters";
 import Modal from "@/app/components/atoms/Modal";
+import { downloadCsv } from "@/app/lib/csv";
 
 interface Props {
   credits: CreditTransaction[]; isAdmin: boolean; isSuperAdmin: boolean; isManager: boolean
@@ -34,9 +35,20 @@ export default function Credit({ credits, isAdmin, isSuperAdmin, isManager, onMu
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const canEdit = isSuperAdmin || isAdmin || isManager;
-  const filtered = credits.filter(c => !statusFilter || c.status === statusFilter);
+  const q = search.toLowerCase();
+  const filtered = credits.filter(c => {
+    if (q && !c.buyer.name.toLowerCase().includes(q) && !c.salesOrder.orderNumber.toLowerCase().includes(q)) return false;
+    if (statusFilter && c.status !== statusFilter) return false;
+    const d = c.createdAt?.slice(0, 10) || "";
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+    return true;
+  });
   const totalOutstanding = credits.filter(c => c.status !== "SETTLED").reduce((s, c) => s + c.amountDue, 0);
 
   async function recordPayment() {
@@ -60,18 +72,41 @@ export default function Credit({ credits, isAdmin, isSuperAdmin, isManager, onMu
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Credit Tracking</h2>
           <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: 13 }}>{credits.length} credit transactions</p>
         </div>
-        {totalOutstanding > 0 && (
-          <div style={{ background: "#b95c5618", border: "1px solid #b95c5633", color: "#8d3e39", padding: "8px 16px", borderRadius: 9, fontWeight: 700, fontSize: 14 }}>
-            ₹ {formatMoney(totalOutstanding)} outstanding
-          </div>
-        )}
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {totalOutstanding > 0 && (
+            <div style={{ background: "#b95c5618", border: "1px solid #b95c5633", color: "#8d3e39", padding: "8px 16px", borderRadius: 9, fontWeight: 700, fontSize: 14 }}>
+              ₹ {formatMoney(totalOutstanding)} outstanding
+            </div>
+          )}
+          <button onClick={() => downloadCsv(`credit_${new Date().toISOString().slice(0,10)}.csv`, filtered.map(c => ({
+            "Order #": c.salesOrder.orderNumber, "Buyer": c.buyer.name,
+            "Total (₹)": c.totalAmount, "Paid (₹)": c.amountPaid, "Due (₹)": c.amountDue,
+            "Due Date": c.dueDate || "", "Status": CREDIT_STATUS_LABELS[c.status] || c.status,
+            "Created": c.createdAt?.slice(0, 10) || "",
+          })))}
+            style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+            ⬇ Export CSV
+          </button>
+        </div>
       </div>
 
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <input placeholder="Search buyer or order number…" value={search} onChange={e => setSearch(e.target.value)}
+          style={{ ...I, flex: 1, minWidth: 200, width: "auto" }} />
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ ...I, width: "auto", minWidth: 180 }}>
           <option value="">All statuses</option>
           {Object.entries(CREDIT_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
+        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="From date"
+          style={{ ...I, width: "auto" }} />
+        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} title="To date"
+          style={{ ...I, width: "auto" }} />
+        {(dateFrom || dateTo) && (
+          <button onClick={() => { setDateFrom(""); setDateTo(""); }}
+            style={{ padding: "10px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: 13, cursor: "pointer" }}>
+            Clear
+          </button>
+        )}
       </div>
 
       {detail && (

@@ -46,10 +46,18 @@ export default function Cutting({ assignments, batches, cuttingMasters, itemType
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [search, setSearch] = useState("");
 
   const canAssign = isSuperAdmin || isAdmin || isManager;
   const canUpdate = canAssign || isCuttingMaster;
-  const filtered = assignments.filter(a => !statusFilter || a.status === statusFilter);
+  const q = search.toLowerCase();
+  const filtered = assignments.filter(a =>
+    (!statusFilter || a.status === statusFilter) &&
+    (!q || a.cuttingMaster.username.toLowerCase().includes(q) ||
+      a.rawClothBatch.batchNumber.toLowerCase().includes(q) ||
+      a.rawClothBatch.clothCategory.name.toLowerCase().includes(q) ||
+      a.itemType.name.toLowerCase().includes(q))
+  );
 
   async function createAssignment() {
     setLoading(true); setError("");
@@ -111,7 +119,9 @@ export default function Cutting({ assignments, batches, cuttingMasters, itemType
         )}
       </div>
 
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <input placeholder="Search master, cloth or item…" value={search} onChange={e => setSearch(e.target.value)}
+          style={{ ...I, flex: 1, minWidth: 200, width: "auto" }} />
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ ...I, width: "auto", minWidth: 180 }}>
           <option value="">All statuses</option>
           {Object.entries(CUTTING_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
