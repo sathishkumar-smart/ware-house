@@ -105,15 +105,16 @@ class CreateWarehouseLocation(graphene.Mutation):
         city = graphene.String()
         state = graphene.String()
         pincode = graphene.String()
+        phone = graphene.String()
 
     warehouse = graphene.Field(WarehouseLocationType)
 
     @login_required
-    def mutate(self, info, name, code, location_type="WAREHOUSE", address="", city="", state="", pincode=""):
+    def mutate(self, info, name, code, location_type="WAREHOUSE", address="", city="", state="", pincode="", phone=""):
         require_role(info.context.user, EmployeeProfile.Role.ADMIN)
         return CreateWarehouseLocation(warehouse=create_warehouse(
             name=name, code=code, location_type=location_type,
-            address=address, city=city, state=state, pincode=pincode,
+            address=address, city=city, state=state, pincode=pincode, phone=phone,
         ))
 
 
@@ -126,6 +127,7 @@ class UpdateWarehouseLocation(graphene.Mutation):
         city = graphene.String()
         state = graphene.String()
         pincode = graphene.String()
+        phone = graphene.String()
         active = graphene.Boolean()
 
     warehouse = graphene.Field(WarehouseLocationType)

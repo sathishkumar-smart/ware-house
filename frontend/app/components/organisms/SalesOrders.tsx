@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { SalesOrder } from "@/app/types";
 import { SO_STATUS_LABELS, STATUS_BADGE_COLORS, PAYMENT_MODE_LABELS } from "@/app/lib/constants";
 import { formatMoney, formatDateShort } from "@/app/lib/formatters";
+import { printDoc, fmtMoney, fmtDate } from "@/app/lib/print";
 
 interface Props {
   orders: SalesOrder[]; isAdmin: boolean; isSuperAdmin: boolean; isManager: boolean
@@ -37,6 +38,49 @@ export default function SalesOrders({ orders, isAdmin, isSuperAdmin, isManager, 
     finally { setLoading(false); }
   }
 
+  function printSO(so: SalesOrder) {
+    const rows = so.items.map(item =>
+      `<tr>
+        <td>${item.finishedProduct.itemType.name}</td>
+        <td style="color:#666;font-size:12px">${item.finishedProduct.sku}</td>
+        <td>${item.quantity}</td>
+        <td class="amount">${fmtMoney(item.unitPrice)}</td>
+        <td class="amount">${fmtMoney(item.totalPrice)}</td>
+      </tr>`
+    ).join("");
+
+    printDoc(`
+      <div class="header">
+        <div class="header-left">
+          <h1>${so.orderNumber}</h1>
+          <div style="font-size:13px;color:#555;margin-top:4px">Sales Order / Invoice</div>
+          <div style="margin-top:6px"><span class="badge">${SO_STATUS_LABELS[so.status] || so.status}</span></div>
+        </div>
+        <div class="header-right">
+          <div style="font-weight:700;font-size:15px">${fmtMoney(so.totalAmount)}</div>
+          <div>Order Date: ${fmtDate(so.orderDate)}</div>
+          <div>Payment: ${PAYMENT_MODE_LABELS[so.paymentMode] || so.paymentMode}</div>
+        </div>
+      </div>
+      <div class="meta">
+        <div class="meta-item"><label>Buyer</label><span>${so.buyer.name}</span></div>
+        <div class="meta-item"><label>Amount Paid</label><span>${fmtMoney(so.amountPaid)}</span></div>
+        <div class="meta-item"><label>Amount Due</label><span style="color:${so.amountDue > 0 ? "#c00" : "#080"}">${fmtMoney(so.amountDue)}</span></div>
+      </div>
+      <h2>Items</h2>
+      <table>
+        <thead><tr><th>Item</th><th>SKU</th><th>Qty</th><th class="amount">Unit Price</th><th class="amount">Total</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="totals">
+        <div class="totals-row"><span>Subtotal</span><span>${fmtMoney(so.subtotal)}</span></div>
+        <div class="totals-row"><span>Discount</span><span>- ${fmtMoney(so.discount)}</span></div>
+        <div class="totals-row grand"><span>Grand Total</span><span>${fmtMoney(so.totalAmount)}</span></div>
+        ${so.amountDue > 0 ? `<div class="totals-row" style="color:#c00"><span>Balance Due</span><span>${fmtMoney(so.amountDue)}</span></div>` : ""}
+      </div>
+    `, so.orderNumber);
+  }
+
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
@@ -60,7 +104,10 @@ export default function SalesOrders({ orders, isAdmin, isSuperAdmin, isManager, 
                 <div style={{ fontWeight: 700, fontSize: 18 }}>{detail.orderNumber}</div>
                 <div style={{ color: "var(--muted)", fontSize: 14 }}>{detail.buyer.name}</div>
               </div>
-              <button onClick={() => { setDetail(null); setError(""); }} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "var(--muted)" }}>×</button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button onClick={() => printSO(detail)} style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>🖨 Print</button>
+                <button onClick={() => { setDetail(null); setError(""); }} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "var(--muted)" }}>×</button>
+              </div>
             </div>
             {error && <div style={{ color: "#f44", marginBottom: 12, fontSize: 13 }}>{error}</div>}
             <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>

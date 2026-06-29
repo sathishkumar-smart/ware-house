@@ -1,0 +1,36 @@
+# Production overrides — run with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Before deploying, update SERVER_IP below (or set it as a shell variable: export SERVER_IP=103.86.177.246)
+
+services:
+
+  backend:
+    volumes: []           # no source mount in production — use the built image
+    environment:
+      - DJANGO_DEBUG=False
+      - DJANGO_ALLOWED_HOSTS=${SERVER_IP:-103.86.177.246},localhost
+      - CORS_ALLOWED_ORIGINS=http://${SERVER_IP:-103.86.177.246}:3000
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"
+
+  frontend:
+    volumes: []           # no source mount in production — use the built image
+    environment:
+      - NEXT_PUBLIC_GRAPHQL_URL=http://${SERVER_IP:-103.86.177.246}:8000/graphql/
+      - NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY:-}
+      - NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID:-}
+      - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:-}
+      - NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID:-}
+      - NEXT_PUBLIC_FIREBASE_VAPID_KEY=${NEXT_PUBLIC_FIREBASE_VAPID_KEY:-}
+    command: sh -c "npm run build && npm run start"
+    ports:
+      - "3000:3000"
+
+  celery:
+    volumes: []
+
+  celery-beat:
+    volumes: []

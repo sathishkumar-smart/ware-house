@@ -45,6 +45,7 @@ class WarehouseLocation(models.Model):
     city = models.CharField(max_length=100, blank=True)
     state = models.CharField(max_length=100, blank=True)
     pincode = models.CharField(max_length=10, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -640,6 +641,22 @@ class SupplierReturn(models.Model):
         return f"{self.return_number} — {self.supplier.name}"
 
 
+class FCMToken(models.Model):
+    """Firebase Cloud Messaging registration token for browser push notifications."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="fcm_tokens", null=True, blank=True,
+    )
+    token = models.CharField(max_length=512, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "warehouse_fcm_tokens"
+
+    def __str__(self):
+        return f"FCM token for {self.user_id}"
+
+
 class OTPCode(models.Model):
     class Purpose(models.TextChoices):
         LOGIN = "LOGIN", "Login"
@@ -648,6 +665,7 @@ class OTPCode(models.Model):
     class Channel(models.TextChoices):
         EMAIL = "EMAIL", "Email"
         SMS = "SMS", "SMS"
+        WHATSAPP = "WHATSAPP", "WhatsApp"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="otp_codes")
     code = models.CharField(max_length=6)
@@ -683,11 +701,33 @@ class Notification(models.Model):
     title = models.CharField(max_length=180)
     message = models.TextField()
     level = models.CharField(max_length=20, choices=Level.choices, default=Level.INFO)
+    link = models.CharField(max_length=200, blank=True, help_text="Frontend tab/anchor to navigate on click")
     read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+
+# ─── audit log ────────────────────────────────────────────────────────────────
+
+class AuditLog(models.Model):
+    entity_type = models.CharField(max_length=64)
+    entity_id = models.CharField(max_length=64)
+    action = models.CharField(max_length=64)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    actor_name = models.CharField(max_length=150)
+    detail = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "warehouse_audit_logs"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.action} on {self.entity_type}#{self.entity_id} by {self.actor_name}"
 
 
 # ─── system settings ──────────────────────────────────────────────────────────
@@ -713,6 +753,13 @@ class SystemSettings(models.Model):
     twilio_auth_token = models.CharField(max_length=200, blank=True)
     twilio_from_number = models.CharField(max_length=20, blank=True)
     sms_enabled = models.BooleanField(default=False)
+    # WhatsApp (Meta Graph API)
+    wa_token = models.CharField(max_length=512, blank=True, help_text="Meta WhatsApp Business access token")
+    wa_phone_number_id = models.CharField(max_length=64, blank=True, help_text="Meta WhatsApp Phone Number ID")
+    wa_enabled = models.BooleanField(default=False)
+    # Firebase Cloud Messaging
+    firebase_service_account_json = models.TextField(blank=True, help_text="Full Firebase service account JSON string")
+    fcm_enabled = models.BooleanField(default=False)
     otp_expiry_minutes = models.PositiveSmallIntegerField(default=10)
     allow_otp_login = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)

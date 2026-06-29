@@ -2,6 +2,7 @@ import graphene
 from graphene_django import DjangoObjectType
 
 from warehouse.models import (
+    AuditLog,
     Buyer,
     BuyerReturn,
     ClothCategory,
@@ -179,6 +180,38 @@ class NotificationType(DjangoObjectType):
     class Meta:
         model = Notification
         fields = "__all__"
+
+
+class AuditLogType(DjangoObjectType):
+    class Meta:
+        model = AuditLog
+        fields = "__all__"
+
+
+# ─── analytics ────────────────────────────────────────────────────────────────
+
+class MonthlyRevenueStat(graphene.ObjectType):
+    month = graphene.String()
+    revenue = graphene.Float()
+    order_count = graphene.Int()
+
+
+class StockCategoryStat(graphene.ObjectType):
+    category = graphene.String()
+    meters = graphene.Float()
+    pieces = graphene.Int()
+
+
+class TopBuyerStat(graphene.ObjectType):
+    buyer_name = graphene.String()
+    total_spend = graphene.Float()
+    order_count = graphene.Int()
+
+
+class AnalyticsStats(graphene.ObjectType):
+    monthly_revenue = graphene.List(MonthlyRevenueStat)
+    stock_by_category = graphene.List(StockCategoryStat)
+    top_buyers = graphene.List(TopBuyerStat)
 
 
 class SystemSettingsType(DjangoObjectType):

@@ -17,6 +17,16 @@ services:
       retries: 10
       start_period: 5s
 
+  redis:
+    image: redis:7-alpine
+    container_name: warehouse_redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   backend:
     build: ./backend
     container_name: warehouse_backend
@@ -24,15 +34,44 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./backend:/app
     ports:
       - "8000:8000"
-    environment:
-      - DB_HOST=postgres
-      - POSTGRES_DB=warehouse
-      - POSTGRES_USER=warehouse
-      - POSTGRES_PASSWORD=warehouse
+    env_file:
+      - ./backend/.env
+
+  celery:
+    build: ./backend
+    container_name: warehouse_celery
+    restart: unless-stopped
+    command: celery -A config worker -l info -Q default --concurrency=2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env
+
+  celery-beat:
+    build: ./backend
+    container_name: warehouse_celery_beat
+    restart: unless-stopped
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env
 
   frontend:
     build: ./frontend

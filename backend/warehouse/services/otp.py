@@ -1,9 +1,9 @@
 """OTP generation, delivery (email + SMS), and verification."""
-import random
+import secrets
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
+from django.db import transaction
 from django.utils import timezone
 from graphql import GraphQLError
 
@@ -13,10 +13,12 @@ User = get_user_model()
 
 
 def _generate_code() -> str:
-    return f"{random.randint(0, 999999):06d}"
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 
 def _send_email_otp(user, code: str, purpose: str, cfg: SystemSettings):
+    if not cfg.email_enabled:
+        return False
     subject = "Your login OTP" if purpose == OTPCode.Purpose.LOGIN else "Your password reset OTP"
     body = (
         f"Hello {user.username},\n\n"
@@ -24,17 +26,8 @@ def _send_email_otp(user, code: str, purpose: str, cfg: SystemSettings):
         f"This code is valid for {cfg.otp_expiry_minutes} minutes.\n\n"
         "If you did not request this, please ignore this email."
     )
-    try:
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=cfg.alert_email or "noreply@garmentflow.app",
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
-        return True
-    except Exception:
-        return False
+    from warehouse.services.notifications import send_email as _send
+    return _send(to=user.email, subject=subject, body_text=body)
 
 
 def _send_sms_otp(user, code: str, purpose: str, cfg: SystemSettings):
@@ -60,11 +53,35 @@ def _send_sms_otp(user, code: str, purpose: str, cfg: SystemSettings):
         return False
 
 
-def request_otp(*, username: str, purpose: str, channel: str) -> dict:
+def _send_whatsapp_otp(user, code: str, purpose: str, cfg: SystemSettings):
+    """Send OTP via WhatsApp using the approved hms_otp template (no 24h window restriction)."""
+    if not cfg.wa_enabled:
+        return False
     try:
-        user = User.objects.get(username=username)
-    except User.DoesNotExist as exc:
-        raise GraphQLError("User not found.") from exc
+        from warehouse.models import EmployeeProfile
+        try:
+            phone = EmployeeProfile.objects.get(user=user).phone
+        except EmployeeProfile.DoesNotExist:
+            return False
+        if not phone:
+            return False
+
+        from warehouse.services.notifications import send_whatsapp_template
+        return send_whatsapp_template(
+            to=phone,
+            template_name="hms_otp",
+            components=[
+                {"type": "body", "parameters": [{"type": "text", "text": code}]},
+                {"type": "button", "sub_type": "url", "index": "0", "parameters": [{"type": "text", "text": code}]},
+            ],
+        )
+    except Exception:
+        return False
+
+
+def request_otp(*, username: str, purpose: str, channel: str) -> dict:
+    from warehouse.services.auth import resolve_identifier
+    user = resolve_identifier(username)
 
     cfg = SystemSettings.load()
 
@@ -87,13 +104,15 @@ def request_otp(*, username: str, purpose: str, channel: str) -> dict:
         expires_at=expiry,
     )
 
-    email_sent, sms_sent = False, False
+    email_sent, sms_sent, wa_sent = False, False, False
     if channel in (OTPCode.Channel.EMAIL, "BOTH"):
         email_sent = _send_email_otp(user, code, purpose, cfg)
     if channel in (OTPCode.Channel.SMS, "BOTH"):
         sms_sent = _send_sms_otp(user, code, purpose, cfg)
+    if channel == OTPCode.Channel.WHATSAPP:
+        wa_sent = _send_whatsapp_otp(user, code, purpose, cfg)
 
-    return {"otp_id": otp.pk, "email_sent": email_sent, "sms_sent": sms_sent}
+    return {"otp_id": otp.pk, "email_sent": email_sent, "sms_sent": sms_sent, "wa_sent": wa_sent}
 
 
 def verify_otp_and_login(*, username: str, code: str, purpose: str):
@@ -103,20 +122,22 @@ def verify_otp_and_login(*, username: str, code: str, purpose: str):
     except User.DoesNotExist as exc:
         raise GraphQLError("Invalid credentials.") from exc
 
-    otp = (
-        OTPCode.objects
-        .filter(user=user, purpose=purpose, used=False)
-        .order_by("-created_at")
-        .first()
-    )
-    if not otp or not otp.is_valid:
-        raise GraphQLError("OTP has expired or is invalid. Please request a new one.")
+    with transaction.atomic():
+        otp = (
+            OTPCode.objects
+            .select_for_update()
+            .filter(user=user, purpose=purpose, used=False)
+            .order_by("-created_at")
+            .first()
+        )
+        if not otp or not otp.is_valid:
+            raise GraphQLError("OTP has expired or is invalid. Please request a new one.")
 
-    otp.attempts += 1
-    if otp.code != code:
-        otp.save(update_fields=["attempts"])
-        raise GraphQLError("Incorrect OTP.")
+        otp.attempts += 1
+        if otp.code != code:
+            otp.save(update_fields=["attempts"])
+            raise GraphQLError("Incorrect OTP.")
 
-    otp.used = True
-    otp.save(update_fields=["used", "attempts"])
+        otp.used = True
+        otp.save(update_fields=["used", "attempts"])
     return user

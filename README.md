@@ -1,6 +1,6 @@
-# Wareflow — Warehouse Management System
+# GarmentFlow ERP
 
-A full-stack warehouse inventory and operations platform built with **Django**, **GraphQL**, **PostgreSQL**, **Next.js 16**, and **Docker Compose**.
+A full-stack garment industry ERP built with **Django 6**, **GraphQL**, **PostgreSQL**, **Next.js 16**, and **Docker Compose**. Designed for private deployment by a single garment business.
 
 ---
 
@@ -8,55 +8,92 @@ A full-stack warehouse inventory and operations platform built with **Django**, 
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 16 (App Router), React 19, TypeScript |
-| Backend | Django 6, Graphene-Django (GraphQL), graphql-jwt |
+| Frontend | Next.js 16 (App Router), React 19, TypeScript, inline styles |
+| Backend | Django 6, Graphene-Django (GraphQL API), graphql-jwt |
 | Database | PostgreSQL 15 |
-| Containerisation | Docker Compose |
+| Auth | JWT (`JWT ` prefix) + OTP via Email / SMS / WhatsApp |
+| Containerisation | Docker Compose (dev) · docker-compose.prod.yml (prod) |
+| Static files | WhiteNoise + Brotli compression |
+| Process manager | Gunicorn (production) |
+| Push notifications | Firebase Cloud Messaging (FCM) |
+| PWA | Web app manifest + service worker (installable on mobile) |
 
 ---
 
 ## Features
 
-### Authentication & roles
-- JWT-based login with token stored in `localStorage`
-- Five-tier role hierarchy enforced on every API mutation and query:
+### Authentication & access control
+- Unified login: enter username **or** email **or** phone — resolves automatically
+- Two modes: password login with Eye/EyeOff toggle, or OTP (channel picker: Email / WhatsApp / SMS)
+- Six-digit OTP with 5-attempt lockout and cryptographically secure generation (`secrets` module)
+- JWT stored in `localStorage`; 60-second silent background refresh
+- Role-based access control enforced on every GraphQL mutation and query
 
-| Role | Permissions |
+| Role | Access |
 |---|---|
-| **Super Administrator** | Full access. Cannot be deactivated or edited by regular admins. Only a Super Admin can create or manage other Super Admin accounts. |
-| **Administrator** | Warehouses, employees, products, vendors, stock, returns, damage, replenishment, settings |
-| **Warehouse Manager** | Assigned warehouses — stock, returns, damage, replenishment |
-| **Inventory Operator** | Assigned warehouse — receive, issue, adjust, returns, damage |
-| **Auditor** | Read-only visibility |
+| **Super Admin** | Everything including Settings and brand color changes |
+| **Admin** | All operational tabs — employees, warehouses, procurement, production, sales |
+| **Manager** | All operational tabs except Settings |
+| **Store Keeper** | Dashboard, raw cloth, readymade stock, finished goods |
+| **Cutting Master** | Dashboard and cutting assignments |
+| **Tailor** | Dashboard and stitching jobs |
+| **Auditor** | Read-only across all data tabs |
 
-### Inventory management
-- Multi-location warehouses with per-warehouse stock balances
-- Product catalogue: SKU, category, vendor, unit price, GST rate, HSN code, reorder level
-- Stock movements: receipt, issue, adjustment, customer return, vendor return, damage
-- Full audit trail — every change records previous balance, signed quantity, new balance, operator, reference, and timestamp
+### Sidebar & navigation
+- Collapsible sidebar with section grouping; role-filtered — menu items the user cannot access are hidden entirely
+- Avatar/name in sidebar footer is clickable → opens My Profile page
+- Logout shows a full-page confirmation overlay (blur backdrop); clears tab state on logout so re-login always opens at Dashboard
+- Dark mode toggle persisted in `localStorage`
+- Mobile: overlay drawer with hamburger button, auto-close on nav tap
 
-### Operations
-- Customer and vendor return tracking with condition (restockable / damaged)
-- Damaged-product quarantine with status lifecycle (Quarantined → Returned / Disposed / Resolved)
-- Vendor replenishment requests with status workflow (Draft → Sent → Acknowledged → Partially received → Completed / Cancelled)
+### Dashboard
+- Live stock-level stats, revenue, order counts
+- Low-stock and out-of-stock alert banner with dismiss button (per-session)
+- 60-second background data refresh (no visible spinner)
+
+### Procurement
+- **Suppliers**: full CRUD with GSTIN, supply type, credit days, WhatsApp
+- **Buyers**: full CRUD with buyer type, credit limit, WhatsApp
+- **Purchase Orders**: line-item PO with raw cloth and readymade items, receive workflow, status lifecycle
+
+### Inventory
+- **Raw Cloth**: batch tracking (category, color, warehouse, meters available, cost/meter)
+- **Readymade Stock**: direct stock entry (item type, size, warehouse, quantity, cost)
+- **Finished Products**: barcode/SKU generation, printable hang-tags, profit margin display
+
+### Production pipeline
+- **Cutting**: assignments from raw cloth batches to cutting masters, piece tracking
+- **Stitching**: jobs from cutting assignments to tailors, QC workflow
+- **Finished Goods**: convert completed stitching jobs to finished product inventory
+
+### Sales
+- **Sales Orders**: line-item orders against finished stock, payment mode (Paid / Credit / Partial)
+- **Credit Ledger**: outstanding balances, payment recording, overdue tracking
+- **Returns**: buyer and supplier return tracking with condition and status
 
 ### Employee management
-- Add, activate/deactivate employees with confirmation dialogs
-- Reset any employee's password directly from the UI (Employees tab → Reset password)
-- Assign employees to one or more warehouses
-- Role badges with visual distinction per tier
+- Add / edit employees, assign to warehouses, reset passwords
+- Role badges with visual color coding
+- **My Profile** page: update email/phone, change password (requires current password)
 
-### Notifications & alerts
-- Low-stock email alert when a product crosses its reorder level
-- Vendor replenishment email on request creation
-- WhatsApp replenishment notification (requires Twilio credentials)
-- In-app notification centre with read/unread state
+### Settings (Super Admin only)
+- App name, subtitle, company name, currency symbol, tax %
+- **Brand Colors**: live color picker for primary and accent colors — applies instantly across the whole app, persisted to database, loaded for all users on page load
+- SMTP email configuration
+- Twilio SMS configuration
+- WhatsApp Business API (Meta Graph API)
+- Firebase FCM push notification credentials
+- OTP expiry and enable/disable toggle
 
-### Settings & theming
-- App name, subtitle, and logo configurable from the Settings tab
-- Custom primary and accent brand colours (live preview)
-- Dark mode toggle — persisted in `localStorage`
-- All theme tokens applied via CSS custom properties; works with dynamic JS overrides
+### Notifications
+- In-app notification centre with read/unread state and badge count
+- Firebase FCM browser push notifications
+- Email, WhatsApp, SMS delivery via configurable credentials (stored in database, admin-editable)
+
+### PWA / Mobile
+- Installable as a home-screen app on Android and iOS
+- Standalone display mode (no browser chrome)
+- Service worker with network-first cache strategy and offline fallback
 
 ---
 
@@ -75,38 +112,46 @@ docker compose up --build
 | GraphQL API | http://localhost:8000/graphql/ |
 | Django admin | http://localhost:8000/admin/ |
 
-### Create the first Super Admin account
+### Create the first Super Admin
 
 ```bash
 docker compose exec backend python manage.py createsuperuser
 ```
 
-The `createsuperuser` account is automatically promoted to **Super Administrator** by the database migration. All further employee accounts should be created through the app (Employees tab → Add employee).
+The Django superuser is automatically mapped to the **Super Admin** role. All further employee accounts should be created through the app (Employees tab → Add employee).
+
+---
+
+## Production deployment
+
+```bash
+# On the server
+cp backend/.env.temp backend/.env   # fill in real values
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+Production overrides (`docker-compose.prod.yml`):
+- Backend runs `gunicorn config.wsgi:application`
+- `DEBUG=False`, `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` from env
+- Frontend runs `next build && next start`
 
 ---
 
 ## Environment variables
 
-Copy `backend/.env.temp` to `backend/.env` and fill in the values:
+Copy `backend/.env.temp` to `backend/.env`:
 
 ```env
 DJANGO_SECRET_KEY=replace-with-a-long-random-secret
-DATABASE_URL=postgres://wareflow:wareflow@db:5432/wareflow
+DATABASE_URL=postgres://garmentflow:garmentflow@db:5432/garmentflow
 
-# Email alerts
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_HOST_USER=you@gmail.com
-EMAIL_HOST_PASSWORD=your-app-password
-WAREHOUSE_ALERT_EMAIL=inventory@example.com
-
-# WhatsApp (Twilio) — optional
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_WHATSAPP_FROM=+14155238886
+# Production
+DJANGO_DEBUG=False
+DJANGO_ALLOWED_HOSTS=yourdomain.com,103.86.177.246
+CORS_ALLOWED_ORIGINS=https://yourdomain.com
 ```
 
-A mail-delivery failure does **not** roll back the inventory operation.
+Notification credentials (SMTP, Twilio, WhatsApp, Firebase) are configured from the in-app Settings page by the Super Admin — no redeploy needed.
 
 ---
 
@@ -115,14 +160,23 @@ A mail-delivery failure does **not** roll back the inventory operation.
 ```
 ware-house/
 ├── backend/
-│   ├── config/          # Django settings, URLs, ASGI
-│   ├── warehouse/       # Main app — models, schema (GraphQL), services, migrations
-│   └── .env.temp        # Environment variable template
+│   ├── config/              # Django settings, URLs, Celery
+│   └── warehouse/
+│       ├── models.py        # All models (single-app design)
+│       ├── permissions.py   # require_role() guard
+│       ├── selectors.py     # Read-only queries
+│       ├── services/        # Business logic layer
+│       └── schema/          # GraphQL types, queries, mutations
 ├── frontend/
 │   └── app/
-│       ├── page.tsx     # Entire SPA (dashboard, all tabs, modals)
-│       └── globals.css  # Design tokens and component styles
-└── docker-compose.yml
+│       ├── page.tsx         # Main SPA shell (sidebar, routing, data)
+│       ├── components/
+│       │   ├── atoms/       # Reusable UI primitives
+│       │   └── organisms/   # Full-page tab components
+│       ├── lib/             # GraphQL client, theme, constants, FCM
+│       └── globals.css      # CSS custom properties (design tokens)
+├── docker-compose.yml
+└── docker-compose.prod.yml
 ```
 
 ---
@@ -140,6 +194,7 @@ docker compose exec backend python manage.py migrate
 ## Indian locale
 
 - Currency displayed in ₹ (INR)
-- GST rate and HSN code fields on every product
-- GSTIN field on vendor records
+- GST / tax percent field on settings
+- GSTIN field on supplier and buyer records
+- State + city dropdowns (India-specific)
 - Timezone: `Asia/Kolkata`

@@ -4,6 +4,8 @@ from graphql_jwt.decorators import login_required
 from warehouse import selectors
 
 from .types import (
+    AnalyticsStats,
+    AuditLogType,
     BuyerReturnType,
     BuyerType,
     ClothCategoryType,
@@ -67,10 +69,14 @@ class Query(graphene.ObjectType):
 
     # Misc
     notifications = graphene.List(NotificationType, unread_only=graphene.Boolean())
+    unread_notification_count = graphene.Int()
+    audit_logs = graphene.List(AuditLogType, entity_type=graphene.String(required=True), entity_id=graphene.ID(required=True))
+    analytics_stats = graphene.Field(AnalyticsStats)
     dashboard_stats = graphene.Field(DashboardStats)
 
     # ── resolvers ─────────────────────────────────────────────────────────────
 
+    @login_required
     def resolve_system_settings(self, info):
         return selectors.get_system_settings()
 
@@ -149,6 +155,18 @@ class Query(graphene.ObjectType):
     @login_required
     def resolve_notifications(self, info, unread_only=False):
         return selectors.get_notifications(info.context.user, unread_only)
+
+    @login_required
+    def resolve_unread_notification_count(self, info):
+        return selectors.get_unread_notification_count(info.context.user)
+
+    @login_required
+    def resolve_audit_logs(self, info, entity_type, entity_id):
+        return selectors.get_audit_logs(entity_type=entity_type, entity_id=str(entity_id))
+
+    @login_required
+    def resolve_analytics_stats(self, info):
+        return selectors.get_analytics_stats(info.context.user)
 
     @login_required
     def resolve_dashboard_stats(self, info):

@@ -1,6 +1,6 @@
 from graphql import GraphQLError
 
-from .models import EmployeeProfile, FinishedProduct, RawClothBatch, WarehouseLocation
+from .models import EmployeeProfile, FinishedProduct, WarehouseLocation
 
 ELEVATED_ROLES = {EmployeeProfile.Role.SUPER_ADMIN, EmployeeProfile.Role.ADMIN}
 MANAGEMENT_ROLES = {EmployeeProfile.Role.SUPER_ADMIN, EmployeeProfile.Role.ADMIN, EmployeeProfile.Role.MANAGER}
@@ -43,13 +43,6 @@ def get_warehouse(user, warehouse_id):
     if not wh:
         raise GraphQLError("Warehouse not found or not assigned to your account.")
     return wh
-
-
-def get_raw_cloth_batch(batch_id):
-    try:
-        return RawClothBatch.objects.select_for_update().get(pk=batch_id, active=True)
-    except RawClothBatch.DoesNotExist as exc:
-        raise GraphQLError("Raw cloth batch not found.") from exc
 
 
 def get_finished_product(product_id):

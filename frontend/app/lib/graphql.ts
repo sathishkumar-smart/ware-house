@@ -1,10 +1,6 @@
 const API_URL = process.env.NEXT_PUBLIC_GRAPHQL_URL || "http://localhost:8000/graphql/";
 
-export async function graphql<T>(
-  query: string,
-  variables: Record<string, unknown> = {},
-  token?: string,
-): Promise<T> {
+async function _fetch<T>(query: string, variables: Record<string, unknown>, token?: string): Promise<T> {
   const response = await fetch(API_URL, {
     method: "POST",
     headers: {
@@ -16,6 +12,49 @@ export async function graphql<T>(
   const payload = await response.json();
   if (payload.errors?.length) throw new Error(payload.errors[0].message || "Something went wrong.");
   return payload.data;
+}
+
+// Silently exchange a refresh token for a new access token and persist it.
+export async function refreshAccessToken(): Promise<string | null> {
+  const rt = localStorage.getItem("refreshToken");
+  if (!rt) return null;
+  try {
+    const data = await _fetch<{ refreshToken: { token: string; refreshToken: string } }>(
+      `mutation R($rt:String!){refreshToken(refreshToken:$rt){token refreshToken}}`,
+      { rt }
+    );
+    const { token, refreshToken: newRt } = data.refreshToken;
+    localStorage.setItem("jwt", token);
+    localStorage.setItem("refreshToken", newRt);
+    return token;
+  } catch {
+    // Refresh token itself expired — force logout
+    localStorage.removeItem("jwt");
+    localStorage.removeItem("refreshToken");
+    return null;
+  }
+}
+
+const EXPIRED_PHRASES = ["signature has expired", "token is expired", "expired"];
+
+export async function graphql<T>(
+  query: string,
+  variables: Record<string, unknown> = {},
+  token?: string,
+): Promise<T> {
+  try {
+    return await _fetch<T>(query, variables, token);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message.toLowerCase() : "";
+    // Auto-refresh on expiry, then retry once
+    if (token && EXPIRED_PHRASES.some(p => msg.includes(p))) {
+      const newToken = await refreshAccessToken();
+      if (newToken) return _fetch<T>(query, variables, newToken);
+      // Refresh failed — propagate so the app can redirect to login
+      throw new Error("SESSION_EXPIRED");
+    }
+    throw err;
+  }
 }
 
 export const SETTINGS_QUERY = `
@@ -30,11 +69,13 @@ export const DASHBOARD_QUERY = `
       id appName appSubtitle logoUrl primaryColor accentColor defaultDarkMode
       companyName currencySymbol taxPercent
       smtpHost smtpPort smtpUser smtpFromEmail emailEnabled
-      twilioAccountSid twilioAuthToken twilioFromNumber smsEnabled
+      twilioAccountSid twilioFromNumber smsEnabled
+      waPhoneNumberId waEnabled
+      fcmEnabled
       otpExpiryMinutes allowOtpLogin
     }
     employeeProfile { id role phone active username email locations { id name code locationType } }
-    warehouseLocations { id name code locationType city state active }
+    warehouseLocations { id name code locationType city state address phone active }
     dashboardStats {
       totalRawMeters totalFinishedPieces readymadePieces inhousePieces
       activePurchaseOrders activeSalesOrders
@@ -104,7 +145,7 @@ export const DASHBOARD_QUERY = `
       id username email role phone active createdAt
       locations { id name code }
     }
-    notifications { id title message level read createdAt }
+    notifications { id title message level read link createdAt }
     buyerReturns {
       id returnNumber condition status reason createdAt quantity
       buyer { id name }

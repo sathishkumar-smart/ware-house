@@ -124,7 +124,7 @@ export interface SupplierReturn {
 // ─── notifications ────────────────────────────────────────────────────────────
 
 export interface NotificationItem {
-  id: string; title: string; message: string; level: string; read: boolean; createdAt: string
+  id: string; title: string; message: string; level: string; read: boolean; link: string; createdAt: string
 }
 export type Notification = NotificationItem
 
@@ -148,16 +148,18 @@ export interface SystemSettings extends AppSettings {
   smtpHost: string; smtpPort: number; smtpUser: string; smtpPassword: string
   smtpFromEmail: string; emailEnabled: boolean
   twilioSid: string; twilioToken: string; twilioFrom: string; smsEnabled: boolean
+  waToken: string; waPhoneNumberId: string; waEnabled: boolean
+  firebaseServiceAccountJson: string; fcmEnabled: boolean
   otpExpiryMinutes: number; allowOtpLogin: boolean
   companyName: string; currencySymbol: string; taxPercent: number
 }
 
 export type Tab =
-  | "dashboard" | "suppliers" | "buyers"
+  | "dashboard" | "analytics" | "suppliers" | "buyers"
   | "purchase_orders" | "raw_cloth" | "readymade_stock"
   | "cutting" | "stitching" | "finished_products"
   | "sales_orders" | "credit" | "returns"
-  | "employees" | "warehouses" | "notifications" | "settings"
+  | "employees" | "warehouses" | "notifications" | "settings" | "profile"
 
 export interface Modal {
   type: string
@@ -166,6 +168,8 @@ export interface Modal {
 
 export interface ConfirmState {
   open: boolean
+  title?: string
   message: string
+  confirmLabel?: string
   onConfirm: () => void
 }

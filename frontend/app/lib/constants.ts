@@ -49,6 +49,7 @@ export const PAYMENT_MODE_LABELS: Record<string, string> = {
 
 export const TAB_TITLES: Record<Tab, string> = {
   dashboard: "Dashboard",
+  analytics: "Analytics",
   suppliers: "Suppliers",
   buyers: "Buyers",
   purchase_orders: "Purchase Orders",
@@ -64,6 +65,7 @@ export const TAB_TITLES: Record<Tab, string> = {
   warehouses: "Warehouses",
   notifications: "Notifications",
   settings: "Settings",
+  profile: "My Profile",
 };
 
 export const STATUS_BADGE_COLORS: Record<string, string> = {

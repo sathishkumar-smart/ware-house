@@ -1,24 +1,18 @@
 """Cutting assignments and stitching jobs — the production pipeline."""
 from decimal import Decimal
 
+from django.db import transaction
 from django.utils import timezone
 from graphql import GraphQLError
 
-from warehouse.models import CuttingAssignment, EmployeeProfile, FinishedProduct, ItemType, StitchingJob
-from warehouse.permissions import get_raw_cloth_batch
+from warehouse.models import CuttingAssignment, EmployeeProfile, FinishedProduct, ItemType, RawClothBatch, StitchingJob
 from warehouse.services.barcode import generate_barcode_svg
 
 
 def create_cutting_assignment(*, user, raw_cloth_batch_id, cutting_master_id, item_type_id,
                               meters_assigned, target_pieces, assigned_date=None, due_date=None, notes=""):
-    batch = get_raw_cloth_batch(raw_cloth_batch_id)
     meters = Decimal(str(meters_assigned))
 
-    if meters > batch.available_meters:
-        raise GraphQLError(
-            f"Only {batch.available_meters}m available in batch {batch.batch_number}, "
-            f"but {meters}m requested."
-        )
     try:
         master = EmployeeProfile.objects.get(pk=cutting_master_id, role=EmployeeProfile.Role.CUTTING_MASTER, active=True)
     except EmployeeProfile.DoesNotExist as exc:
@@ -28,20 +22,33 @@ def create_cutting_assignment(*, user, raw_cloth_batch_id, cutting_master_id, it
     except ItemType.DoesNotExist as exc:
         raise GraphQLError("Item type not found.") from exc
 
-    batch.available_meters -= meters
-    batch.save(update_fields=["available_meters", "updated_at"])
+    with transaction.atomic():
+        # select_for_update must run inside an atomic block to prevent double-assignment
+        try:
+            batch = RawClothBatch.objects.select_for_update().get(pk=raw_cloth_batch_id, active=True)
+        except RawClothBatch.DoesNotExist as exc:
+            raise GraphQLError("Raw cloth batch not found.") from exc
 
-    return CuttingAssignment.objects.create(
-        raw_cloth_batch=batch,
-        cutting_master=master,
-        item_type=item_type,
-        meters_assigned=meters,
-        target_pieces=target_pieces,
-        assigned_date=assigned_date or timezone.now().date(),
-        due_date=due_date,
-        notes=notes.strip(),
-        assigned_by=user,
-    )
+        if meters > batch.available_meters:
+            raise GraphQLError(
+                f"Only {batch.available_meters}m available in batch {batch.batch_number}, "
+                f"but {meters}m requested."
+            )
+
+        batch.available_meters -= meters
+        batch.save(update_fields=["available_meters", "updated_at"])
+
+        return CuttingAssignment.objects.create(
+            raw_cloth_batch=batch,
+            cutting_master=master,
+            item_type=item_type,
+            meters_assigned=meters,
+            target_pieces=target_pieces,
+            assigned_date=assigned_date or timezone.now().date(),
+            due_date=due_date,
+            notes=notes.strip(),
+            assigned_by=user,
+        )
 
 
 def update_cutting_assignment(*, id, status=None, pieces_completed=None, cloth_used=None,
@@ -133,40 +140,42 @@ def create_finished_products(*, user, stitching_job_id=None, readymade_stock_id=
 
     sj = None
     rs = None
-    if stitching_job_id:
-        try:
-            sj = StitchingJob.objects.get(pk=stitching_job_id)
-        except StitchingJob.DoesNotExist as exc:
-            raise GraphQLError("Stitching job not found.") from exc
-        item_type_id = sj.cutting_assignment.item_type_id
-        cloth_category_id = sj.cutting_assignment.raw_cloth_batch.cloth_category_id
-        cloth_color_id = sj.cutting_assignment.raw_cloth_batch.cloth_color_id
 
-    if readymade_stock_id:
-        try:
-            rs = ReadymadeStock.objects.get(pk=readymade_stock_id)
-        except ReadymadeStock.DoesNotExist as exc:
-            raise GraphQLError("Readymade stock not found.") from exc
-        if rs.quantity_available < quantity:
-            raise GraphQLError(f"Only {rs.quantity_available} units available.")
-        rs.quantity_available -= quantity
-        rs.save(update_fields=["quantity_available"])
-        item_type_id = rs.item_type_id
-        cloth_color_id = rs.cloth_color_id
+    with transaction.atomic():
+        if stitching_job_id:
+            try:
+                sj = StitchingJob.objects.get(pk=stitching_job_id)
+            except StitchingJob.DoesNotExist as exc:
+                raise GraphQLError("Stitching job not found.") from exc
+            item_type_id = sj.cutting_assignment.item_type_id
+            cloth_category_id = sj.cutting_assignment.raw_cloth_batch.cloth_category_id
+            cloth_color_id = sj.cutting_assignment.raw_cloth_batch.cloth_color_id
 
-    fp = FinishedProduct.objects.create(
-        item_type_id=item_type_id,
-        cloth_category_id=cloth_category_id,
-        cloth_color_id=cloth_color_id,
-        size=size.strip(),
-        source=source,
-        stitching_job=sj,
-        readymade_stock=rs,
-        quantity=quantity,
-        warehouse=warehouse,
-        cost_price=Decimal(str(cost_price)),
-        sale_price=Decimal(str(sale_price)),
-    )
-    fp.barcode_svg = generate_barcode_svg(fp.barcode)
-    fp.save(update_fields=["barcode_svg"])
-    return fp
+        if readymade_stock_id:
+            try:
+                rs = ReadymadeStock.objects.select_for_update().get(pk=readymade_stock_id)
+            except ReadymadeStock.DoesNotExist as exc:
+                raise GraphQLError("Readymade stock not found.") from exc
+            if rs.quantity_available < quantity:
+                raise GraphQLError(f"Only {rs.quantity_available} units available.")
+            rs.quantity_available -= quantity
+            rs.save(update_fields=["quantity_available"])
+            item_type_id = rs.item_type_id
+            cloth_color_id = rs.cloth_color_id
+
+        fp = FinishedProduct.objects.create(
+            item_type_id=item_type_id,
+            cloth_category_id=cloth_category_id,
+            cloth_color_id=cloth_color_id,
+            size=size.strip(),
+            source=source,
+            stitching_job=sj,
+            readymade_stock=rs,
+            quantity=quantity,
+            warehouse=warehouse,
+            cost_price=Decimal(str(cost_price)),
+            sale_price=Decimal(str(sale_price)),
+        )
+        fp.barcode_svg = generate_barcode_svg(fp.barcode)
+        fp.save(update_fields=["barcode_svg"])
+        return fp

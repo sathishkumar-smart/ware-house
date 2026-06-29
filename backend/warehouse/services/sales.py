@@ -98,35 +98,36 @@ def update_sales_order_status(*, id, status, actual_delivery=None):
 
 
 def record_credit_payment(*, credit_id, amount, payment_method="CASH", reference="", notes="", user):
-    try:
-        credit = CreditTransaction.objects.select_for_update().get(pk=credit_id)
-    except CreditTransaction.DoesNotExist as exc:
-        raise GraphQLError("Credit transaction not found.") from exc
-    if credit.status == CreditTransaction.Status.SETTLED:
-        raise GraphQLError("This credit has already been fully settled.")
-
     payment_amount = Decimal(str(amount))
     if payment_amount <= 0:
         raise GraphQLError("Payment amount must be greater than zero.")
-    if payment_amount > credit.amount_due:
-        raise GraphQLError(f"Payment ({payment_amount}) exceeds outstanding balance ({credit.amount_due}).")
 
     from django.utils import timezone
-    CreditPayment.objects.create(
-        credit=credit, amount=payment_amount, payment_method=payment_method.upper(),
-        reference=reference.strip(), notes=notes.strip(), recorded_by=user,
-        payment_date=timezone.now().date(),
-    )
-    credit.amount_paid += payment_amount
-    credit.amount_due -= payment_amount
-    if credit.amount_due <= 0:
-        credit.status = CreditTransaction.Status.SETTLED
-    else:
-        credit.status = CreditTransaction.Status.PARTIAL
-    credit.save()
+    with transaction.atomic():
+        try:
+            credit = CreditTransaction.objects.select_for_update().get(pk=credit_id)
+        except CreditTransaction.DoesNotExist as exc:
+            raise GraphQLError("Credit transaction not found.") from exc
+        if credit.status == CreditTransaction.Status.SETTLED:
+            raise GraphQLError("This credit has already been fully settled.")
+        if payment_amount > credit.amount_due:
+            raise GraphQLError(f"Payment ({payment_amount}) exceeds outstanding balance ({credit.amount_due}).")
 
-    so = credit.sales_order
-    so.amount_paid = credit.amount_paid
-    so.amount_due = credit.amount_due
-    so.save(update_fields=["amount_paid", "amount_due"])
+        CreditPayment.objects.create(
+            credit=credit, amount=payment_amount, payment_method=payment_method.upper(),
+            reference=reference.strip(), notes=notes.strip(), recorded_by=user,
+            payment_date=timezone.now().date(),
+        )
+        credit.amount_paid += payment_amount
+        credit.amount_due -= payment_amount
+        if credit.amount_due <= 0:
+            credit.status = CreditTransaction.Status.SETTLED
+        else:
+            credit.status = CreditTransaction.Status.PARTIAL
+        credit.save()
+
+        so = credit.sales_order
+        so.amount_paid = credit.amount_paid
+        so.amount_due = credit.amount_due
+        so.save(update_fields=["amount_paid", "amount_due"])
     return credit

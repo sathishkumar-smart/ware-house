@@ -28,6 +28,11 @@ class UpdateSystemSettings(graphene.Mutation):
         twilio_auth_token = graphene.String()
         twilio_from_number = graphene.String()
         sms_enabled = graphene.Boolean()
+        wa_token = graphene.String()
+        wa_phone_number_id = graphene.String()
+        wa_enabled = graphene.Boolean()
+        firebase_service_account_json = graphene.String()
+        fcm_enabled = graphene.Boolean()
         otp_expiry_minutes = graphene.Int()
         allow_otp_login = graphene.Boolean()
 

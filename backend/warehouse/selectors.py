@@ -3,6 +3,7 @@ from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
 from .models import (
+    AuditLog,
     Buyer,
     BuyerReturn,
     ClothCategory,
@@ -16,6 +17,7 @@ from .models import (
     RawClothBatch,
     ReadymadeStock,
     SalesOrder,
+    SalesOrderItem,
     StitchingJob,
     Supplier,
     SupplierReturn,
@@ -302,9 +304,6 @@ def get_dashboard_stats(user):
     )
 
 
-from .models import SalesOrderItem
-
-
 def get_buyer_returns(user):
     return BuyerReturn.objects.select_related(
         "buyer", "finished_product", "finished_product__item_type", "warehouse"
@@ -315,3 +314,93 @@ def get_supplier_returns(user):
     return SupplierReturn.objects.select_related(
         "supplier", "raw_cloth_batch", "readymade_stock", "warehouse"
     ).order_by("-created_at")
+
+
+# ─── notifications ────────────────────────────────────────────────────────────
+
+def get_unread_notification_count(user) -> int:
+    return Notification.objects.filter(recipient=user, read=False).count()
+
+
+# ─── audit log ────────────────────────────────────────────────────────────────
+
+def get_audit_logs(*, entity_type: str, entity_id: str):
+    return AuditLog.objects.filter(entity_type=entity_type, entity_id=entity_id).select_related("actor")[:100]
+
+
+# ─── analytics ────────────────────────────────────────────────────────────────
+
+def get_analytics_stats(user):
+    """Return analytics data for the last 12 months."""
+    from django.db.models.functions import TruncMonth
+    from decimal import Decimal
+    from warehouse.schema.types import AnalyticsStats, MonthlyRevenueStat, StockCategoryStat, TopBuyerStat
+
+    warehouses = accessible_warehouses(user)
+
+    # Monthly revenue (last 12 months)
+    cutoff = timezone.now() - timezone.timedelta(days=365)
+    monthly_qs = (
+        SalesOrder.objects
+        .filter(warehouse__in=warehouses, status="DELIVERED", order_date__gte=cutoff)
+        .annotate(month=TruncMonth("order_date"))
+        .values("month")
+        .annotate(revenue=Sum("total_amount"), order_count=Count("id"))
+        .order_by("month")
+    )
+    monthly_revenue = [
+        MonthlyRevenueStat(
+            month=row["month"].strftime("%b %Y"),
+            revenue=float(row["revenue"] or 0),
+            order_count=row["order_count"],
+        )
+        for row in monthly_qs
+    ]
+
+    # Stock by category
+    cloth_qs = (
+        RawClothBatch.objects
+        .filter(warehouse__in=warehouses, available_meters__gt=0)
+        .select_related("cloth_category")
+    )
+    cat_map: dict[str, float] = {}
+    for b in cloth_qs:
+        cat_map[b.cloth_category.name] = cat_map.get(b.cloth_category.name, 0) + float(b.available_meters)
+
+    rmd_qs = (
+        ReadymadeStock.objects
+        .filter(warehouse__in=warehouses, quantity_available__gt=0)
+        .select_related("item_type")
+    )
+    pcs_map: dict[str, int] = {}
+    for r in rmd_qs:
+        pcs_map[r.item_type.name] = pcs_map.get(r.item_type.name, 0) + r.quantity_available
+
+    all_cats = set(cat_map) | set(pcs_map)
+    stock_by_category = [
+        StockCategoryStat(category=c, meters=cat_map.get(c, 0), pieces=pcs_map.get(c, 0))
+        for c in sorted(all_cats)
+    ]
+
+    # Top buyers (last 12 months)
+    top_qs = (
+        SalesOrder.objects
+        .filter(warehouse__in=warehouses, status="DELIVERED", order_date__gte=cutoff)
+        .values("buyer__name")
+        .annotate(total_spend=Sum("total_amount"), order_count=Count("id"))
+        .order_by("-total_spend")[:8]
+    )
+    top_buyers = [
+        TopBuyerStat(
+            buyer_name=row["buyer__name"],
+            total_spend=float(row["total_spend"] or 0),
+            order_count=row["order_count"],
+        )
+        for row in top_qs
+    ]
+
+    return AnalyticsStats(
+        monthly_revenue=monthly_revenue,
+        stock_by_category=stock_by_category,
+        top_buyers=top_buyers,
+    )

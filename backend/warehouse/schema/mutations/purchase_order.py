@@ -3,6 +3,8 @@ from graphql_jwt.decorators import login_required
 
 from warehouse.models import EmployeeProfile
 from warehouse.permissions import require_role
+from warehouse.services.audit import log_action
+from warehouse.services.notify import notify_managers
 from warehouse.services.purchase_order import (
     create_purchase_order, receive_purchase_order, update_purchase_order_status,
 )
@@ -46,10 +48,16 @@ class CreatePurchaseOrder(graphene.Mutation):
     @login_required
     def mutate(self, info, supplier_id, order_type, warehouse_id, items, **kwargs):
         require_role(info.context.user, EmployeeProfile.Role.ADMIN, EmployeeProfile.Role.MANAGER)
-        return CreatePurchaseOrder(purchase_order=create_purchase_order(
+        po = create_purchase_order(
             user=info.context.user, supplier_id=supplier_id, order_type=order_type,
             warehouse_id=warehouse_id, items=[dict(i) for i in items], **kwargs,
-        ))
+        )
+        log_action(entity_type="PurchaseOrder", entity_id=po.pk, action="CREATED",
+                   actor=info.context.user, detail={"po_number": po.po_number, "supplier": po.supplier.name})
+        notify_managers(title=f"New PO: {po.po_number}",
+                        message=f"{po.po_number} created by {info.context.user.username} from {po.supplier.name}",
+                        link="purchase_orders")
+        return CreatePurchaseOrder(purchase_order=po)
 
 
 class UpdatePurchaseOrderStatus(graphene.Mutation):
@@ -63,7 +71,10 @@ class UpdatePurchaseOrderStatus(graphene.Mutation):
     @login_required
     def mutate(self, info, id, status, actual_delivery=None):
         require_role(info.context.user, EmployeeProfile.Role.ADMIN, EmployeeProfile.Role.MANAGER, EmployeeProfile.Role.STORE_KEEPER)
-        return UpdatePurchaseOrderStatus(purchase_order=update_purchase_order_status(id=id, status=status, actual_delivery=actual_delivery))
+        po = update_purchase_order_status(id=id, status=status, actual_delivery=actual_delivery)
+        log_action(entity_type="PurchaseOrder", entity_id=po.pk, action=f"STATUS_CHANGED_TO_{status}",
+                   actor=info.context.user, detail={"status": status})
+        return UpdatePurchaseOrderStatus(purchase_order=po)
 
 
 class ReceivePurchaseOrder(graphene.Mutation):
@@ -76,6 +87,9 @@ class ReceivePurchaseOrder(graphene.Mutation):
     @login_required
     def mutate(self, info, po_id, receipt_items):
         require_role(info.context.user, EmployeeProfile.Role.ADMIN, EmployeeProfile.Role.MANAGER, EmployeeProfile.Role.STORE_KEEPER)
-        return ReceivePurchaseOrder(purchase_order=receive_purchase_order(
+        po = receive_purchase_order(
             po_id=po_id, user=info.context.user, receipt_items=[dict(i) for i in receipt_items],
-        ))
+        )
+        log_action(entity_type="PurchaseOrder", entity_id=po.pk, action="RECEIVED",
+                   actor=info.context.user, detail={"po_number": po.po_number})
+        return ReceivePurchaseOrder(purchase_order=po)

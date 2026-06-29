@@ -1,9 +1,23 @@
 import type { AppSettings } from "@/app/types";
 
+function lighten(hex: string, t: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const mix = (c: number) => Math.round(c + (255 - c) * t).toString(16).padStart(2, "0");
+  return `#${mix(r)}${mix(g)}${mix(b)}`;
+}
+
 export function applyBrandColors(cfg: Partial<AppSettings>) {
-  const r = document.documentElement;
-  if (cfg.primaryColor) r.style.setProperty("--primary", cfg.primaryColor);
-  if (cfg.accentColor) r.style.setProperty("--accent", cfg.accentColor);
+  const root = document.documentElement;
+  if (cfg.primaryColor) {
+    const p = cfg.primaryColor;
+    root.style.setProperty("--primary",     p);
+    root.style.setProperty("--primary-2",   lighten(p, 0.12));
+    root.style.setProperty("--primary-3",   lighten(p, 0.32));
+    root.style.setProperty("--pale-green",  lighten(p, 0.84));
+  }
+  if (cfg.accentColor) root.style.setProperty("--accent", cfg.accentColor);
 }
 
 export function applyDarkMode(dark: boolean) {

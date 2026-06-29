@@ -14,4 +14,9 @@ node_modules/
 
 # OS
 .DS_Store
-Thumbs.dbbackend/.env
+Thumbs.db
+
+# Backend secrets
+backend/.env
+backend/.env.*
+backend/.env*

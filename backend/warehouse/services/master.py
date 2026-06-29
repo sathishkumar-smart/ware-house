@@ -71,20 +71,21 @@ def update_item_type(*, id, name=None, category=None, cloth_length_per_piece=Non
 
 # ── warehouse location ────────────────────────────────────────────────────────
 
-def create_warehouse(*, name, code, location_type="WAREHOUSE", address="", city="", state="", pincode=""):
+def create_warehouse(*, name, code, location_type="WAREHOUSE", address="", city="", state="", pincode="", phone=""):
     if WarehouseLocation.objects.filter(code__iexact=code.strip()).exists():
         raise GraphQLError("A location with this code already exists.")
     return WarehouseLocation.objects.create(
         name=name.strip(), code=code.strip().upper(),
         location_type=location_type, address=address.strip(),
         city=city.strip(), state=state.strip(), pincode=pincode.strip(),
+        phone=phone.strip(),
     )
 
 
-def update_warehouse(*, id, name=None, location_type=None, address=None, city=None, state=None, pincode=None, active=None):
+def update_warehouse(*, id, name=None, location_type=None, address=None, city=None, state=None, pincode=None, phone=None, active=None):
     obj = _get_or_404(WarehouseLocation, id)
     _set_fields(obj, name=name, location_type=location_type, address=address,
-                city=city, state=state, pincode=pincode, active=active)
+                city=city, state=state, pincode=pincode, phone=phone, active=active)
     obj.save()
     return obj
 

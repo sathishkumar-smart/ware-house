@@ -394,23 +394,39 @@ textarea { min-height: 78px; resize: vertical; }
 .login-card .form-error { margin-bottom: 20px; }
 
 /* ─── Modal ───────────────────────────────────────────────────────────────── */
-.modal-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(12,27,20,.56); display: grid; place-items: center; padding: 22px; backdrop-filter: blur(3px); }
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 20;
+  background: rgba(10,20,15,.52);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 40px 16px 60px;
+  overflow-y: auto;
+  backdrop-filter: blur(5px);
+}
 .modal {
-  width: min(620px, 100%); max-height: calc(100vh - 44px); overflow-y: auto;
-  background: var(--paper);              /* was: white */
-  border-radius: 13px; box-shadow: 0 30px 80px rgba(0,0,0,.25);
+  width: min(620px, 100%);
+  background: var(--paper);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.15), 0 4px 16px rgba(0,0,0,.08);
+  border: 1px solid var(--line);
   transition: background .25s;
 }
-.modal-head { display: flex; justify-content: space-between; padding: 23px 25px 19px; border-bottom: 1px solid var(--line); }
-.modal-head h2 { font-family: Georgia, serif; font-weight: 500; margin: 3px 0 4px; font-size: 23px; }
-.modal-head span { color: var(--muted); font-size: 10px; }
-.modal-head > button {
-  width: 31px; height: 31px; border-radius: 50%;
-  border: 1px solid var(--line); background: var(--paper); /* was: white */
-  color: var(--modal-close-color); font-size: 18px;
+.modal-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 18px 24px; border-bottom: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
 }
-.modal form { padding: 10px 25px 23px; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.modal-head h2 { font-weight: 700; margin: 0; font-size: 16px; letter-spacing: -.2px; }
+.modal-head span { color: var(--muted); font-size: 11px; display: block; margin-top: 2px; }
+.modal-head > button {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 1px solid var(--line); background: transparent;
+  color: var(--muted); font-size: 18px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  cursor: pointer;
+}
+.modal form { padding: 20px 24px 24px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.modal-footer { padding: 14px 24px 20px; border-top: 1px solid var(--line); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 20px; padding-top: 17px; border-top: 1px solid var(--line); }
 .center-state { min-height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; color: var(--muted); }
 .spinner { width: 24px; height: 24px; border-radius: 50%; border: 3px solid #d9e1dc; border-top-color: var(--primary-3); animation: spin .8s linear infinite; }

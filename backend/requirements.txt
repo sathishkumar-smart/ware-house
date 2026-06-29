@@ -9,3 +9,9 @@ python-dotenv
 requests
 python-barcode
 Pillow
+firebase-admin
+celery[redis]
+django-celery-beat
+django-celery-results
+whitenoise[brotli]
+gunicorn

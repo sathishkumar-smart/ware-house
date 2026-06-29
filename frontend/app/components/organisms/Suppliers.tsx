@@ -2,13 +2,34 @@
 import { useState } from "react";
 import type { Supplier } from "@/app/types";
 import { SUPPLY_TYPE_LABELS } from "@/app/lib/constants";
+import StateCity from "@/app/components/atoms/StateCity";
+import Modal from "@/app/components/atoms/Modal";
 
-interface Props { suppliers: Supplier[]; isSuperAdmin: boolean; isAdmin: boolean; onMutate: (q: string, v: Record<string, unknown>) => Promise<void> }
+interface Props { suppliers: Supplier[]; isSuperAdmin: boolean; isAdmin: boolean; isManager?: boolean; onMutate: (q: string, v: Record<string, unknown>) => Promise<void> }
 
 const empty = (): Partial<Supplier> => ({ name: "", contactPerson: "", email: "", phone: "", whatsapp: "", address: "", city: "", state: "", gstin: "", supplyType: "RAW_CLOTH", creditDays: 0, notes: "" });
 
+const SUPPLY_COLORS: Record<string, string> = { RAW_CLOTH: "#2563eb", READYMADE: "#7c3aed", BOTH: "#059669" };
+
+const I: React.CSSProperties = {
+  padding: "10px 13px", borderRadius: 9, border: "1px solid var(--line)",
+  background: "var(--input-bg)", color: "var(--ink)", fontSize: 14, width: "100%", outline: "none",
+};
+const BTN_PRI: React.CSSProperties = {
+  flex: 1, padding: "11px 0", borderRadius: 9, border: "none",
+  background: "var(--primary)", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 14,
+};
+const BTN_SEC: React.CSSProperties = {
+  flex: 1, padding: "11px 0", borderRadius: 9, border: "1px solid var(--line)",
+  background: "transparent", color: "var(--ink)", cursor: "pointer", fontSize: 14,
+};
+const LBL: React.CSSProperties = {
+  display: "flex", flexDirection: "column", gap: 5,
+  fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: 0.4, textTransform: "uppercase",
+};
+
 function Badge({ label, color }: { label: string; color: string }) {
-  return <span style={{ padding: "2px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600, background: color + "22", color }}>{label}</span>;
+  return <span style={{ padding: "3px 10px", borderRadius: 99, fontSize: 11, fontWeight: 700, background: color + "18", color, border: `1px solid ${color}33` }}>{label}</span>;
 }
 
 export default function Suppliers({ suppliers, isSuperAdmin, isAdmin, onMutate }: Props) {
@@ -17,127 +38,180 @@ export default function Suppliers({ suppliers, isSuperAdmin, isAdmin, onMutate }
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [waIsSameAsPhone, setWaIsSameAsPhone] = useState(false);
 
   const canEdit = isSuperAdmin || isAdmin;
-  const filtered = suppliers.filter(s => s.name.toLowerCase().includes(search.toLowerCase()) || s.contactPerson?.toLowerCase().includes(search.toLowerCase()));
+  const filtered = suppliers.filter(s =>
+    s.name.toLowerCase().includes(search.toLowerCase()) ||
+    s.contactPerson?.toLowerCase().includes(search.toLowerCase())
+  );
 
   async function save() {
     if (!editing) return;
+    if (!editing.name?.trim()) { setError("Company Name is required"); return; }
     setLoading(true); setError("");
     try {
       const m = isNew
         ? `mutation C($name:String!,$cp:String,$email:String,$phone:String,$wa:String,$addr:String,$city:String,$state:String,$gstin:String,$st:String,$cd:Int,$notes:String){createSupplier(name:$name,contactPerson:$cp,email:$email,phone:$phone,whatsapp:$wa,address:$addr,city:$city,state:$state,gstin:$gstin,supplyType:$st,creditDays:$cd,notes:$notes){supplier{id}}}`
         : `mutation U($id:ID!,$name:String,$cp:String,$email:String,$phone:String,$wa:String,$addr:String,$city:String,$state:String,$gstin:String,$st:String,$cd:Int,$notes:String,$active:Boolean){updateSupplier(id:$id,name:$name,contactPerson:$cp,email:$email,phone:$phone,whatsapp:$wa,address:$addr,city:$city,state:$state,gstin:$gstin,supplyType:$st,creditDays:$cd,notes:$notes,active:$active){supplier{id}}}`;
-      await onMutate(m, { id: editing.id, name: editing.name, cp: editing.contactPerson, email: editing.email, phone: editing.phone, wa: editing.whatsapp, addr: editing.address, city: editing.city, state: editing.state, gstin: editing.gstin, st: editing.supplyType, cd: editing.creditDays, notes: editing.notes, active: editing.active });
+      const cd = editing.creditDays != null ? parseInt(String(editing.creditDays), 10) : undefined;
+      await onMutate(m, { id: editing.id, name: editing.name, cp: editing.contactPerson, email: editing.email, phone: editing.phone, wa: editing.whatsapp, addr: editing.address, city: editing.city, state: editing.state, gstin: editing.gstin, st: editing.supplyType, cd: Number.isFinite(cd as number) ? cd : undefined, notes: editing.notes, active: editing.active });
       setEditing(null);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Failed"); }
     finally { setLoading(false); }
   }
 
-  const input = (label: string, field: keyof Supplier, type = "text") => (
-    <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-      {label}
-      <input type={type} value={editing?.[field] as string ?? ""} onChange={e => setEditing(p => ({ ...p, [field]: e.target.value }))}
-        style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)", fontSize: 14 }} />
+  function openNew() {
+    setIsNew(true); setEditing(empty()); setError(""); setWaIsSameAsPhone(false);
+  }
+  function openEdit(s: Supplier) {
+    setIsNew(false); setEditing(s); setError("");
+    setWaIsSameAsPhone(!!(s.phone && s.phone === s.whatsapp));
+  }
+
+  function handlePhoneChange(v: string) {
+    setEditing(p => ({ ...p, phone: v, whatsapp: waIsSameAsPhone ? v : (p?.whatsapp ?? "") }));
+  }
+
+  function handleWaToggle(checked: boolean) {
+    setWaIsSameAsPhone(checked);
+    if (checked) setEditing(p => ({ ...p, whatsapp: p?.phone || "" }));
+  }
+
+  const field = (label: string, f: keyof Supplier, type = "text") => (
+    <label style={LBL}>{label}
+      <input type={type} value={editing?.[f] as string ?? ""} onChange={e => setEditing(p => ({ ...p, [f]: e.target.value }))} style={I} />
     </label>
   );
-
-  const SUPPLY_COLORS: Record<string, string> = { RAW_CLOTH: "#2196f3", READYMADE: "#9c27b0", BOTH: "#4caf50" };
 
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <h2 style={{ margin: 0 }}>Suppliers <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 16 }}>({suppliers.length})</span></h2>
-        {canEdit && <button onClick={() => { setIsNew(true); setEditing(empty()); setError(""); }}
-          style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: "var(--primary)", color: "#fff", fontWeight: 600, cursor: "pointer" }}>+ Add Supplier</button>}
-      </div>
-      <input placeholder="Search suppliers…" value={search} onChange={e => setSearch(e.target.value)}
-        style={{ marginBottom: 16, width: "100%", maxWidth: 360, padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)", fontSize: 14, boxSizing: "border-box" }} />
-
-      {/* Form modal */}
-      {editing && (
-        <div style={{ position: "fixed", inset: 0, background: "#0008", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "var(--paper)", borderRadius: 16, padding: 32, width: 520, maxHeight: "90vh", overflowY: "auto", border: "1px solid var(--border)" }}>
-            <h3 style={{ margin: "0 0 20px" }}>{isNew ? "Add Supplier" : "Edit Supplier"}</h3>
-            {error && <div style={{ color: "#f44", marginBottom: 12, fontSize: 13 }}>{error}</div>}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              {input("Company Name *", "name")}
-              {input("Contact Person", "contactPerson")}
-              {input("Email", "email", "email")}
-              {input("Phone", "phone", "tel")}
-              {input("WhatsApp", "whatsapp", "tel")}
-              {input("GSTIN", "gstin")}
-              {input("City", "city")}
-              {input("State", "state")}
-            </div>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, marginTop: 14 }}>
-              Address
-              <textarea value={editing.address ?? ""} onChange={e => setEditing(p => ({ ...p, address: e.target.value }))}
-                style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)", fontSize: 14, resize: "vertical", minHeight: 60 }} />
-            </label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 14 }}>
-              <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
-                Supply Type
-                <select value={editing.supplyType ?? "RAW_CLOTH"} onChange={e => setEditing(p => ({ ...p, supplyType: e.target.value }))}
-                  style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)", fontSize: 14 }}>
-                  {Object.entries(SUPPLY_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </label>
-              <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
-                Credit Days
-                <input type="number" value={editing.creditDays ?? 0} onChange={e => setEditing(p => ({ ...p, creditDays: +e.target.value }))}
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)", fontSize: 14 }} />
-              </label>
-            </div>
-            {!isNew && (
-              <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, fontSize: 14 }}>
-                <input type="checkbox" checked={editing.active ?? true} onChange={e => setEditing(p => ({ ...p, active: e.target.checked }))} />
-                Active
-              </label>
-            )}
-            <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-              <button onClick={save} disabled={loading} style={{ flex: 1, padding: "11px", borderRadius: 8, border: "none", background: "var(--primary)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
-                {loading ? "Saving…" : "Save"}
-              </button>
-              <button onClick={() => setEditing(null)} style={{ flex: 1, padding: "11px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--fg)", cursor: "pointer" }}>Cancel</button>
-            </div>
-          </div>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Suppliers</h2>
+          <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: 13 }}>{suppliers.length} suppliers</p>
         </div>
+        {canEdit && (
+          <button onClick={openNew} className="primary-button">+ Add Supplier</button>
+        )}
+      </div>
+
+      <input placeholder="Search suppliers…" value={search} onChange={e => setSearch(e.target.value)}
+        style={{ ...I, maxWidth: 360, marginBottom: 16 }} />
+
+      {editing && (
+        <Modal
+          title={isNew ? "Add Supplier" : "Edit Supplier"}
+          subtitle={isNew ? "Add a new cloth supplier" : `Editing: ${editing.name}`}
+          onClose={() => { setEditing(null); setError(""); }}
+          width={560}
+          footer={
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={save} disabled={loading} style={BTN_PRI}>{loading ? "Saving…" : "Save"}</button>
+              <button onClick={() => { setEditing(null); setError(""); }} style={BTN_SEC}>Cancel</button>
+            </div>
+          }
+        >
+          {error && <div style={{ background: "#fff0ef", border: "1px solid #f1cbc8", color: "#8d3e39", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{error}</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {field("Company Name *", "name")}
+            {field("Contact Person", "contactPerson")}
+            {field("Email", "email", "email")}
+            {/* Phone with WhatsApp-same-as-phone toggle */}
+            <label style={LBL}>Phone
+              <input type="tel" value={editing.phone ?? ""} onChange={e => handlePhoneChange(e.target.value)} style={I} />
+            </label>
+            <label style={LBL}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span>WhatsApp</span>
+                <label style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 600, fontSize: 10, textTransform: "none", letterSpacing: 0, cursor: "pointer", color: waIsSameAsPhone ? "var(--primary)" : "var(--muted)" }}>
+                  <input type="checkbox" checked={waIsSameAsPhone} onChange={e => handleWaToggle(e.target.checked)} style={{ accentColor: "var(--primary)", width: 11, height: 11 }} />
+                  same as phone
+                </label>
+              </div>
+              <input type="tel" value={editing.whatsapp ?? ""} disabled={waIsSameAsPhone}
+                onChange={e => setEditing(p => ({ ...p, whatsapp: e.target.value }))}
+                style={{ ...I, opacity: waIsSameAsPhone ? 0.5 : 1, cursor: waIsSameAsPhone ? "not-allowed" : "text" }} />
+            </label>
+            {field("GSTIN", "gstin")}
+            <StateCity
+              state={editing.state || ""} city={editing.city || ""}
+              onStateChange={v => setEditing(p => ({ ...p, state: v }))}
+              onCityChange={v => setEditing(p => ({ ...p, city: v }))}
+            />
+          </div>
+          <label style={{ ...LBL, marginTop: 14 }}>Address
+            <textarea value={editing.address ?? ""} onChange={e => setEditing(p => ({ ...p, address: e.target.value }))}
+              style={{ ...I, resize: "vertical", minHeight: 64 }} />
+          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 14 }}>
+            <label style={LBL}>Supply Type
+              <select value={editing.supplyType ?? "RAW_CLOTH"} onChange={e => setEditing(p => ({ ...p, supplyType: e.target.value }))} style={I}>
+                {Object.entries(SUPPLY_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </label>
+            <label style={LBL}>Credit Days
+              <input type="number" value={editing.creditDays ?? 0} onChange={e => setEditing(p => ({ ...p, creditDays: +e.target.value }))} style={I} />
+            </label>
+          </div>
+          <div style={{ position: "relative", marginTop: 14 }}>
+            <label style={LBL}>Notes
+              <textarea value={editing.notes ?? ""} onChange={e => setEditing(p => ({ ...p, notes: e.target.value.slice(0, 200) }))}
+                style={{ ...I, resize: "vertical", minHeight: 72 }} maxLength={200} placeholder="Internal notes about this supplier" />
+            </label>
+            <span style={{ position: "absolute", bottom: 8, right: 10, fontSize: 10, color: (editing.notes?.length ?? 0) > 170 ? "#e07" : "var(--muted)", pointerEvents: "none" }}>{editing.notes?.length ?? 0}/200</span>
+          </div>
+          {!isNew && (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, fontSize: 14, cursor: "pointer" }}>
+              <input type="checkbox" checked={editing.active ?? true} onChange={e => setEditing(p => ({ ...p, active: e.target.checked }))} />
+              <span>Active supplier</span>
+            </label>
+          )}
+        </Modal>
       )}
 
-      {/* Table */}
-      <div style={{ background: "var(--paper)", borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
+      <div style={{ background: "var(--paper)", borderRadius: 12, border: "1px solid var(--line)", overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ background: "var(--bg)", fontSize: 12, color: "var(--muted)", textAlign: "left" }}>
-              {["Supplier", "Contact", "Phone", "Type", "GSTIN", ""].map(h => (
-                <th key={h} style={{ padding: "10px 16px", fontWeight: 600, borderBottom: "1px solid var(--border)" }}>{h}</th>
+            <tr style={{ background: "var(--th-bg)", textAlign: "left" }}>
+              {["Supplier", "Contact", "Phone / WA", "Type", "GSTIN", ""].map(h => (
+                <th key={h} style={{ padding: "11px 16px", fontWeight: 700, fontSize: 10, color: "var(--muted)", letterSpacing: 0.5, textTransform: "uppercase", borderBottom: "1px solid var(--line)" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.map(s => (
-              <tr key={s.id} style={{ borderBottom: "1px solid var(--border)", opacity: s.active ? 1 : 0.5 }}>
-                <td style={{ padding: "12px 16px" }}>
-                  <div style={{ fontWeight: 600 }}>{s.name}</div>
-                  {s.city && <div style={{ fontSize: 12, color: "var(--muted)" }}>{s.city}, {s.state}</div>}
+              <tr key={s.id} style={{ borderBottom: "1px solid var(--panel-border)", opacity: s.active ? 1 : 0.5 }}>
+                <td style={{ padding: "13px 16px" }}>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{s.name}</div>
+                  {s.city && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{s.city}, {s.state}</div>}
                 </td>
-                <td style={{ padding: "12px 16px" }}>
-                  <div>{s.contactPerson}</div>
-                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{s.email}</div>
+                <td style={{ padding: "13px 16px" }}>
+                  <div style={{ fontSize: 13 }}>{s.contactPerson}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{s.email}</div>
                 </td>
-                <td style={{ padding: "12px 16px", fontSize: 14 }}>{s.phone}</td>
-                <td style={{ padding: "12px 16px" }}>
+                <td style={{ padding: "13px 16px" }}>
+                  <div style={{ fontSize: 13 }}>{s.phone}</div>
+                  {s.whatsapp && s.whatsapp !== s.phone && (
+                    <div style={{ fontSize: 11, color: "#25d366", marginTop: 2 }}>WA: {s.whatsapp}</div>
+                  )}
+                  {s.whatsapp && s.whatsapp === s.phone && (
+                    <div style={{ fontSize: 10, color: "#25d366", marginTop: 2 }}>📱 WA same</div>
+                  )}
+                </td>
+                <td style={{ padding: "13px 16px" }}>
                   <Badge label={SUPPLY_TYPE_LABELS[s.supplyType] || s.supplyType} color={SUPPLY_COLORS[s.supplyType] || "#666"} />
                 </td>
-                <td style={{ padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>{s.gstin || "—"}</td>
-                <td style={{ padding: "12px 16px" }}>
-                  {canEdit && <button onClick={() => { setIsNew(false); setEditing(s); setError(""); }}
-                    style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", cursor: "pointer", fontSize: 13 }}>Edit</button>}
+                <td style={{ padding: "13px 16px", fontSize: 12, color: "var(--muted)", fontFamily: "monospace" }}>{s.gstin || "—"}</td>
+                <td style={{ padding: "13px 16px" }}>
+                  {canEdit && (
+                    <button onClick={() => openEdit(s)}
+                      style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Edit</button>
+                  )}
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={6} style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>No suppliers found</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={6} style={{ padding: "56px 20px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No suppliers found</td></tr>}
           </tbody>
         </table>
       </div>
